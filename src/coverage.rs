@@ -9,19 +9,19 @@ use std::collections::{HashMap, HashSet};
 pub struct CoverageReport {
     /// Name of the spec
     pub spec_name: String,
-    
+
     /// Total number of rules in the spec
     pub total_rules: usize,
-    
+
     /// Rules that are referenced at least once
     pub covered_rules: HashSet<String>,
-    
+
     /// Rules that have no references (orphaned)
     pub uncovered_rules: HashSet<String>,
-    
+
     /// References to rules that don't exist in the spec
     pub invalid_references: Vec<RuleReference>,
-    
+
     /// All valid references, grouped by rule ID
     pub references_by_rule: HashMap<String, Vec<RuleReference>>,
 }
@@ -50,10 +50,8 @@ impl CoverageReport {
         }
 
         let all_rules: HashSet<String> = manifest.rule_ids().map(|s| s.to_string()).collect();
-        let uncovered_rules: HashSet<String> = all_rules
-            .difference(&covered_rules)
-            .cloned()
-            .collect();
+        let uncovered_rules: HashSet<String> =
+            all_rules.difference(&covered_rules).cloned().collect();
 
         CoverageReport {
             spec_name,

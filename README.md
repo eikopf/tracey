@@ -34,11 +34,25 @@ tracey will match these against your spec's rule manifest and tell you:
 Create `.config/tracey/config.kdl`:
 
 ```kdl
-specs {
-    spec {
-        name "rapace"
-        rules_url "https://rapace.dev/_rules.json"
-    }
+spec {
+    name "rapace"
+    rules_url "https://rapace.dev/_rules.json"
+}
+```
+
+You can define multiple specs:
+
+```kdl
+spec {
+    name "rapace"
+    rules_url "https://rapace.dev/_rules.json"
+}
+
+spec {
+    name "other-spec"
+    rules_url "https://example.com/_rules.json"
+    include "src/other/**/*.rs"
+    exclude "src/other/tests/**"
 }
 ```
 

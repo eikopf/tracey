@@ -10,6 +10,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Deserialize)]
 pub struct RuleInfo {
     /// URL fragment to link to this rule
+    #[allow(dead_code)]
     pub url: String,
 }
 
@@ -54,6 +55,7 @@ impl SpecManifest {
     }
 
     /// Get the URL for a rule
+    #[allow(dead_code)]
     pub fn get_rule_url(&self, id: &str) -> Option<&str> {
         self.rules.get(id).map(|r| r.url.as_str())
     }

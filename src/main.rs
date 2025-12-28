@@ -42,68 +42,72 @@ struct Args {
 async fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let args: Args = facet_args::from_std_args()
-        .wrap_err("Failed to parse command line arguments")?;
+    let args: Args =
+        facet_args::from_std_args().wrap_err("Failed to parse command line arguments")?;
 
     // Find project root (look for Cargo.toml)
     let project_root = find_project_root()?;
-    
+
     // Load config
-    let config_path = args.config.unwrap_or_else(|| {
-        project_root.join(".config/tracey/config.kdl")
-    });
-    
+    let config_path = args
+        .config
+        .unwrap_or_else(|| project_root.join(".config/tracey/config.kdl"));
+
     let config = load_config(&config_path)?;
-    
+
     let threshold = args.threshold.unwrap_or(0.0);
     let mut all_passing = true;
 
     for spec_config in &config.specs {
+        let spec_name = &spec_config.name.value;
+        let rules_url = &spec_config.rules_url.value;
+
         eprintln!(
             "{} Fetching spec manifest for {}...",
             "->".blue().bold(),
-            spec_config.name.cyan()
+            spec_name.cyan()
         );
 
         // Fetch the spec manifest
-        let manifest = SpecManifest::fetch(&spec_config.rules_url).await?;
-        
+        let manifest = SpecManifest::fetch(rules_url).await?;
+
         eprintln!(
             "   Found {} rules in spec",
             manifest.rules.len().to_string().green()
         );
 
         // Scan source files
-        eprintln!(
-            "{} Scanning Rust files...",
-            "->".blue().bold()
-        );
+        eprintln!("{} Scanning Rust files...", "->".blue().bold());
 
-        let include = if spec_config.include.is_empty() {
+        let include: Vec<String> = if spec_config.include.is_empty() {
             vec!["**/*.rs".to_string()]
         } else {
-            spec_config.include.clone()
+            spec_config
+                .include
+                .iter()
+                .map(|i| i.pattern.clone())
+                .collect()
         };
-        
-        let exclude = if spec_config.exclude.is_empty() {
+
+        let exclude: Vec<String> = if spec_config.exclude.is_empty() {
             vec!["target/**".to_string()]
         } else {
-            spec_config.exclude.clone()
+            spec_config
+                .exclude
+                .iter()
+                .map(|e| e.pattern.clone())
+                .collect()
         };
 
         let references = scanner::scan_directory(&project_root, &include, &exclude)?;
-        
+
         eprintln!(
             "   Found {} rule references",
             references.len().to_string().green()
         );
 
         // Compute coverage
-        let report = CoverageReport::compute(
-            spec_config.name.clone(),
-            &manifest,
-            references,
-        );
+        let report = CoverageReport::compute(spec_name.clone(), &manifest, references);
 
         // Print report
         print_report(&report, args.verbose);
@@ -122,16 +126,15 @@ async fn main() -> Result<()> {
 
 fn find_project_root() -> Result<PathBuf> {
     let mut current = std::env::current_dir()?;
-    
+
     loop {
         if current.join("Cargo.toml").exists() {
             return Ok(current);
         }
-        
+
         if !current.pop() {
             // No Cargo.toml found, use current directory
-            return std::env::current_dir()
-                .wrap_err("Failed to get current directory");
+            return std::env::current_dir().wrap_err("Failed to get current directory");
         }
     }
 }
@@ -141,11 +144,9 @@ fn load_config(path: &PathBuf) -> Result<Config> {
         eyre::bail!(
             "Config file not found at {}\n\n\
              Create a config file with your spec configuration:\n\n\
-             specs {{\n    \
-                 spec {{\n        \
-                     name \"my-spec\"\n        \
-                     rules_url \"https://example.com/_rules.json\"\n    \
-                 }}\n\
+             spec {{\n    \
+                 name \"my-spec\"\n    \
+                 rules_url \"https://example.com/_rules.json\"\n\
              }}",
             path.display()
         );
@@ -214,16 +215,12 @@ fn print_report(report: &CoverageReport, verbose: bool) {
             "?".yellow().bold(),
             report.uncovered_rules.len()
         );
-        
+
         let mut uncovered: Vec<_> = report.uncovered_rules.iter().collect();
         uncovered.sort();
-        
+
         for rule_id in uncovered {
-            println!(
-                "  {} [{}]",
-                "-".yellow(),
-                rule_id.dimmed()
-            );
+            println!("  {} [{}]", "-".yellow(), rule_id.dimmed());
         }
         println!();
     }
@@ -235,10 +232,10 @@ fn print_report(report: &CoverageReport, verbose: bool) {
             "+".green().bold(),
             report.covered_rules.len()
         );
-        
+
         let mut rules: Vec<_> = report.references_by_rule.keys().collect();
         rules.sort();
-        
+
         for rule_id in rules {
             let refs = &report.references_by_rule[rule_id];
             println!(
@@ -248,11 +245,7 @@ fn print_report(report: &CoverageReport, verbose: bool) {
                 refs.len()
             );
             for r in refs {
-                println!(
-                    "      {}:{}",
-                    r.file.dimmed(),
-                    r.line.to_string().dimmed()
-                );
+                println!("      {}:{}", r.file.dimmed(), r.line.to_string().dimmed());
             }
         }
         println!();

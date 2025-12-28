@@ -26,13 +26,13 @@ pub fn scan_directory(
             continue;
         }
 
-        // Only process .rs files
-        if path.extension().is_some_and(|ext| ext == "rs") {
-            if is_included(path, root, include_patterns) {
-                let content = std::fs::read_to_string(path)?;
-                let refs = extract_rule_references(path, &content)?;
-                all_references.extend(refs);
-            }
+        // Only process .rs files that match include patterns
+        if path.extension().is_some_and(|ext| ext == "rs")
+            && is_included(path, root, include_patterns)
+        {
+            let content = std::fs::read_to_string(path)?;
+            let refs = extract_rule_references(path, &content)?;
+            all_references.extend(refs);
         }
     }
 
@@ -80,8 +80,7 @@ fn matches_glob(path: &str, pattern: &str) -> bool {
     }
 
     // Handle target/** exclusion
-    if pattern.ends_with("/**") {
-        let prefix = &pattern[..pattern.len() - 3];
+    if let Some(prefix) = pattern.strip_suffix("/**") {
         return path.starts_with(prefix);
     }
 

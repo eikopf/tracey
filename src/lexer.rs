@@ -16,6 +16,7 @@ pub struct RuleReference {
     /// Line number (1-indexed)
     pub line: usize,
     /// The full comment text containing the reference
+    #[allow(dead_code)]
     pub context: String,
 }
 
@@ -31,10 +32,10 @@ pub fn extract_rule_references(path: &Path, content: &str) -> Result<Vec<RuleRef
 
     // Simple approach: scan for comments and extract [rule.id] patterns
     // We look for both // and /// comments, as well as /* */ blocks
-    
+
     for (line_idx, line) in content.lines().enumerate() {
         let line_num = line_idx + 1;
-        
+
         // Check for line comments (// or ///)
         if let Some(comment_start) = line.find("//") {
             let comment = &line[comment_start..];
@@ -50,7 +51,7 @@ pub fn extract_rule_references(path: &Path, content: &str) -> Result<Vec<RuleRef
 
     for (line_idx, line) in content.lines().enumerate() {
         let line_num = line_idx + 1;
-        
+
         if in_block_comment {
             if let Some(end_pos) = line.find("*/") {
                 block_comment_content.push_str(&line[..end_pos]);
@@ -95,16 +96,16 @@ fn extract_references_from_text(
     // Look for [rule.id] patterns
     // Rule IDs are: lowercase letters, digits, dots, and hyphens
     // Pattern: \[([a-z][a-z0-9.-]*)\]
-    
+
     let mut chars = text.char_indices().peekable();
-    
+
     while let Some((_start_idx, ch)) = chars.next() {
         if ch == '[' {
             // Potential rule reference start
             let mut rule_id = String::new();
             let mut valid = true;
             let mut found_dot = false;
-            
+
             // First char must be lowercase letter
             if let Some(&(_, first_char)) = chars.peek() {
                 if first_char.is_ascii_lowercase() {
@@ -116,7 +117,7 @@ fn extract_references_from_text(
             } else {
                 valid = false;
             }
-            
+
             if valid {
                 // Continue reading the rule ID
                 while let Some(&(_, c)) = chars.peek() {
@@ -136,7 +137,7 @@ fn extract_references_from_text(
                     }
                 }
             }
-            
+
             // Rule ID must contain at least one dot (hierarchical)
             // and not end with a dot
             if valid && found_dot && !rule_id.ends_with('.') && !rule_id.is_empty() {
@@ -162,7 +163,7 @@ mod tests {
             // See [channel.id.allocation] for details
             fn allocate_id() {}
         "#;
-        
+
         let refs = extract_rule_references(&PathBuf::from("test.rs"), content).unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].rule_id, "channel.id.allocation");
@@ -174,7 +175,7 @@ mod tests {
             /// Implements [channel.id.parity] and [channel.id.no-reuse]
             fn next_channel_id() {}
         "#;
-        
+
         let refs = extract_rule_references(&PathBuf::from("test.rs"), content).unwrap();
         assert_eq!(refs.len(), 2);
         assert_eq!(refs[0].rule_id, "channel.id.parity");
@@ -188,7 +189,7 @@ mod tests {
             // [Some text] is not a rule either
             fn foo() {}
         "#;
-        
+
         let refs = extract_rule_references(&PathBuf::from("test.rs"), content).unwrap();
         assert_eq!(refs.len(), 0);
     }

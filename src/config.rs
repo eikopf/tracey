@@ -3,11 +3,13 @@
 //! Config lives at `.config/tracey/config.kdl` relative to the project root.
 
 use facet::Facet;
+use facet_kdl as kdl;
 
 /// Root configuration for tracey
 #[derive(Debug, Facet)]
 pub struct Config {
     /// Specifications to track coverage against
+    #[facet(kdl::children, default)]
     pub specs: Vec<SpecConfig>,
 }
 
@@ -15,29 +17,44 @@ pub struct Config {
 #[derive(Debug, Facet)]
 pub struct SpecConfig {
     /// Name of the spec (for display purposes)
-    pub name: String,
+    #[facet(kdl::child)]
+    pub name: Name,
 
     /// URL to the spec's _rules.json manifest
     /// e.g., "https://rapace.dev/_rules.json"
-    pub rules_url: String,
+    #[facet(kdl::child)]
+    pub rules_url: RulesUrl,
 
     /// Glob patterns for Rust files to scan
     /// Defaults to ["**/*.rs"] if not specified
-    #[facet(default)]
-    pub include: Vec<String>,
+    #[facet(kdl::children, default)]
+    pub include: Vec<Include>,
 
     /// Glob patterns to exclude
-    #[facet(default)]
-    pub exclude: Vec<String>,
+    #[facet(kdl::children, default)]
+    pub exclude: Vec<Exclude>,
 }
 
-impl Default for SpecConfig {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            rules_url: String::new(),
-            include: vec!["**/*.rs".to_string()],
-            exclude: vec!["target/**".to_string()],
-        }
-    }
+#[derive(Debug, Facet)]
+pub struct Name {
+    #[facet(kdl::argument)]
+    pub value: String,
+}
+
+#[derive(Debug, Facet)]
+pub struct RulesUrl {
+    #[facet(kdl::argument)]
+    pub value: String,
+}
+
+#[derive(Debug, Facet)]
+pub struct Include {
+    #[facet(kdl::argument)]
+    pub pattern: String,
+}
+
+#[derive(Debug, Facet)]
+pub struct Exclude {
+    #[facet(kdl::argument)]
+    pub pattern: String,
 }
