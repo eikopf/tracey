@@ -10,6 +10,11 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata]
+
+[package.metadata."docs.rs"]
+rustdoc-args = ["--html-in-header", "arborium-header.html"]
+
 [[bin]]
 name = "tracey"
 path = "src/main.rs"
