@@ -220,13 +220,13 @@ function OutlineTree({
 // Declare lucide as global
 declare const lucide: { createIcons: (opts?: { nodes?: NodeList }) => void };
 
-// [impl dashboard.spec.outline]
-// [impl dashboard.spec.outline-coverage]
-// [impl dashboard.spec.content]
-// [impl dashboard.spec.rule-highlight]
-// [impl dashboard.spec.heading-scroll]
-// [impl dashboard.links.heading-links]
-// [impl dashboard.links.spec-aware]
+// r[impl dashboard.spec.outline]
+// r[impl dashboard.spec.outline-coverage]
+// r[impl dashboard.spec.content]
+// r[impl dashboard.spec.req-highlight]
+// r[impl dashboard.spec.heading-scroll]
+// r[impl dashboard.links.heading-links]
+// r[impl dashboard.links.spec-aware]
 export function SpecView({
   config,
   version,
@@ -482,7 +482,7 @@ export function SpecView({
             .then((res) => res.json())
             .then((data: FileContent) => {
               console.log("Setting preview modal");
-              // [impl code-unit.nested.smallest]
+              // r[impl code-unit.nested.smallest]
               // Find the smallest code unit containing this line.
               // Server-side code unit extraction includes preceding comments in startLine,
               // so a simple containment check works correctly.

@@ -2181,6 +2181,7 @@ async fn run_server(
 
     // Clone for file watcher
     let watch_project_root = project_root.clone();
+    let watch_config = config.clone();
 
     let (debounce_tx, mut debounce_rx) = tokio::sync::mpsc::channel::<()>(1);
 
@@ -2188,18 +2189,40 @@ async fn run_server(
     std::thread::spawn(move || {
         let debounce_tx = debounce_tx;
         let watch_root = watch_project_root.clone();
+        let watch_root_for_closure = watch_root.clone();
+
+        // Collect all include patterns from config (specs + impls)
+        let mut include_patterns: Vec<String> = Vec::new();
+        let mut exclude_patterns: Vec<String> = Vec::new();
+        for spec in &watch_config.specs {
+            // Spec include patterns (markdown files)
+            for inc in &spec.include {
+                include_patterns.push(inc.pattern.clone());
+            }
+            // Impl include/exclude patterns (source files)
+            for impl_ in &spec.impls {
+                for inc in &impl_.include {
+                    include_patterns.push(inc.pattern.clone());
+                }
+                for exc in &impl_.exclude {
+                    exclude_patterns.push(exc.pattern.clone());
+                }
+            }
+        }
+        // Also watch the config file itself
+        include_patterns.push(".config/tracey/config.kdl".to_string());
 
         let mut debouncer = match new_debouncer(
             Duration::from_millis(200),
             move |res: Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>| {
-                // Filter events to ignore node_modules, target, .git, and dashboard
-                let ignored_paths = ["node_modules", "target", ".git", "dashboard", ".vite"];
+                // Always ignore these directories (build artifacts, dependencies, VCS)
+                let always_ignored = ["node_modules", "target", ".git", ".vite"];
 
-                let is_ignored = |path: &Path| {
+                let is_always_ignored = |path: &Path| {
                     for component in path.components() {
                         if let std::path::Component::Normal(name) = component
                             && let Some(name_str) = name.to_str()
-                            && ignored_paths.contains(&name_str)
+                            && always_ignored.contains(&name_str)
                         {
                             return true;
                         }
@@ -2207,14 +2230,50 @@ async fn run_server(
                     false
                 };
 
+                // Check if path matches any include pattern (relative to watch root)
+                let matches_include = |path: &Path| {
+                    let relative = path
+                        .strip_prefix(&watch_root_for_closure)
+                        .unwrap_or(path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+
+                    for pattern in &include_patterns {
+                        if glob_match(&relative, pattern) {
+                            return true;
+                        }
+                    }
+                    false
+                };
+
+                // Check if path matches any exclude pattern
+                let matches_exclude = |path: &Path| {
+                    let relative = path
+                        .strip_prefix(&watch_root_for_closure)
+                        .unwrap_or(path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+
+                    for pattern in &exclude_patterns {
+                        if glob_match(&relative, pattern) {
+                            return true;
+                        }
+                    }
+                    false
+                };
+
+                let should_trigger = |path: &Path| {
+                    !is_always_ignored(path) && matches_include(path) && !matches_exclude(path)
+                };
+
                 match res {
                     Ok(events) => {
                         let dominated_events: Vec<_> =
-                            events.iter().filter(|e| !is_ignored(&e.path)).collect();
+                            events.iter().filter(|e| should_trigger(&e.path)).collect();
                         if dominated_events.is_empty() {
                             debug!(
                                 total = events.len(),
-                                "all file events filtered out (ignored paths)"
+                                "all file events filtered out (not matching config patterns)"
                             );
                         } else {
                             info!(
