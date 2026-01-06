@@ -1141,6 +1141,14 @@ Hovering over a requirement definition in a spec file MUST display coverage info
 r[lsp.hover.prefix]
 Hovering over a prefix (e.g., `r` in `r[impl auth.token]`) MUST display the spec name and source URL if configured.
 
+### Document Highlight
+
+r[lsp.highlight.full-range]
+When the cursor is positioned anywhere within a requirement reference (e.g., `r[impl auth.token]`), document highlight MUST return the full range from the prefix through the closing bracket.
+
+> r[lsp.highlight.consistent]
+> Highlighting MUST work consistently regardless of which token within the reference the cursor is on (prefix, verb, or any segment of the requirement ID).
+
 ### Go to Definition
 
 r[lsp.goto.ref-to-def]
@@ -1148,6 +1156,20 @@ Go-to-definition on a requirement reference MUST navigate to the requirement def
 
 r[lsp.goto.def-to-impl]
 Go-to-definition on a requirement definition MUST offer navigation to all implementation references (when multiple exist, show a picker).
+
+r[lsp.goto.precise-location]
+Go-to-definition MUST navigate to the exact line and column where the requirement marker begins, not just the line.
+
+### Go to Implementation
+
+r[lsp.impl.from-ref]
+Go-to-implementation on a requirement reference MUST navigate to implementation references (impl and define verbs) for that requirement.
+
+> r[lsp.impl.multiple]
+> When multiple implementation references exist, the server MUST return all locations, allowing the editor to show a picker.
+
+r[lsp.impl.from-def]
+Go-to-implementation on a requirement definition in a spec file MUST behave identically to go-to-implementation on a reference.
 
 ### Find References
 
@@ -1232,6 +1254,107 @@ The server MAY provide code lens on requirement definitions showing inline cover
 r[lsp.codelens.run-test]
 The server MAY provide code lens on verify references offering to run the associated test.
 
+r[lsp.codelens.clickable]
+Code lens items MUST be clickable, navigating to the references panel or running the associated action.
+
+### Rename
+
+r[lsp.rename.req-id]
+The server MUST support renaming requirement IDs, updating the definition in the spec file and all references across implementation files.
+
+> r[lsp.rename.validation]
+> The server MUST validate the new requirement ID:
+> - It MUST follow the dotted identifier format (e.g., `auth.token.validation`)
+> - It MUST NOT conflict with an existing requirement ID
+> - It MUST preserve the existing prefix
+
+r[lsp.rename.prepare]
+The server MUST support prepare-rename to indicate whether rename is available at the cursor position and provide the current identifier range.
+
+r[lsp.rename.preview]
+The server SHOULD support workspace edit previews, allowing users to review all changes before applying.
+
+### Inlay Hints
+
+r[lsp.inlay.coverage-status]
+The server MAY provide inlay hints after requirement references showing coverage status icons (e.g., ✓ for covered, ⚠ for partially covered, ✗ for uncovered).
+
+r[lsp.inlay.impl-count]
+The server MAY provide inlay hints after requirement definitions showing implementation counts (e.g., `← 3 impls`).
+
+r[lsp.inlay.configurable]
+Inlay hints MUST be configurable, allowing users to enable/disable specific hint types.
+
+### Call Hierarchy
+
+r[lsp.callhierarchy.depends]
+The server MAY support call hierarchy for requirement dependencies:
+- **Incoming calls**: Requirements that depend on this one (`depends` references)
+- **Outgoing calls**: Requirements this one depends on
+
+> r[lsp.callhierarchy.visualization]
+> The call hierarchy MUST show the dependency chain, enabling navigation through requirement relationships.
+
+### Selection Range
+
+r[lsp.selection.smart]
+The server SHOULD support smart selection expansion:
+1. First expansion: select the requirement ID
+2. Second expansion: select the full reference including prefix and brackets
+3. Third expansion: select the entire comment or line
+
+### Folding Range
+
+r[lsp.folding.spec-sections]
+The server MAY provide folding ranges for spec file sections, allowing collapsing of heading groups.
+
+r[lsp.folding.blockquote-requirements]
+The server MAY provide folding ranges for multi-line blockquote requirements in spec files.
+
+### Linked Editing
+
+r[lsp.linked-editing.req-id]
+The server MAY support linked editing ranges, enabling simultaneous editing of requirement IDs when they appear multiple times in the same file.
+
+### Signature Help
+
+r[lsp.signature.verb]
+The server MAY provide signature help when typing verbs, showing the expected format and available verbs.
+
+> r[lsp.signature.verb-format]
+> Example signature help for `r[|`:
+> ```
+> r[<verb> <requirement-id>]
+> Verbs: impl, verify, depends, related
+> ```
+
+### Document Links
+
+r[lsp.doclinks.dashboard]
+The server MAY provide document links for requirement references, making them clickable links to the tracey dashboard.
+
+r[lsp.doclinks.spec-source]
+The server MAY provide document links in hover content, making file paths clickable.
+
+### Formatting
+
+r[lsp.format.alignment]
+The server MAY provide formatting for requirement references, aligning multiple references in adjacent lines.
+
+> r[lsp.format.alignment-example]
+> Before:
+> ```rust
+> // r[impl auth.token]
+> // r[impl auth.token.validation.expiry]
+> // r[impl auth.refresh]
+> ```
+> After:
+> ```rust
+> // r[impl auth.token]
+> // r[impl auth.token.validation.expiry]
+> // r[impl auth.refresh]
+> ```
+
 ## Zed Extension
 
 The tracey-zed extension integrates tracey with the Zed editor, providing requirement traceability features through the LSP server.
@@ -1280,6 +1403,21 @@ Completions from the tracey LSP MUST appear in Zed's autocomplete menu.
 
 r[zed.lsp.actions]
 Code actions from the tracey LSP MUST appear in Zed's code actions menu.
+
+r[zed.lsp.highlight]
+Document highlight from the tracey LSP MUST highlight the full requirement reference range when the cursor is positioned within it.
+
+r[zed.lsp.implementation]
+Go-to-implementation from the tracey LSP MUST work with Zed's standard go-to-implementation keybinding, showing a picker when multiple implementations exist.
+
+r[zed.lsp.rename]
+Rename from the tracey LSP MUST work with Zed's rename functionality, updating all references across the workspace.
+
+r[zed.lsp.codelens]
+Code lens from the tracey LSP MUST appear inline in Zed above requirement definitions.
+
+r[zed.lsp.inlay-hints]
+Inlay hints from the tracey LSP MUST appear inline in Zed, respecting Zed's inlay hint settings.
 
 ### Zed-Specific Features
 
