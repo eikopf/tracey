@@ -1052,3 +1052,262 @@ Example template:
 
 r[dashboard.editing.add.cursor-position status=draft]
 The cursor MUST be positioned inside the brackets after `r[` to enable immediate typing of the requirement ID, followed by tab to move to the content line.
+
+## LSP Server
+
+Tracey provides a Language Server Protocol (LSP) server for editor integration, enabling real-time feedback on requirement references directly in source code and specification files.
+
+### Server Lifecycle
+
+r[lsp.lifecycle.stdio]
+The `tracey lsp` command MUST start an LSP server communicating over stdio.
+
+r[lsp.lifecycle.initialize]
+The server MUST respond to the `initialize` request with supported capabilities including diagnostics, hover, go-to-definition, and code actions.
+
+r[lsp.lifecycle.workspace-folders]
+The server MUST support workspace folders, using the workspace root to locate the tracey configuration file.
+
+r[lsp.lifecycle.config-watch]
+The server MUST watch the configuration file for changes and reload configuration when it changes.
+
+### Diagnostics
+
+r[lsp.diagnostics.broken-refs]
+The server MUST publish diagnostics for references to non-existent requirement IDs, with severity `Error`.
+
+> r[lsp.diagnostics.broken-refs-message]
+> The diagnostic message MUST include the invalid requirement ID and suggest similar valid IDs if any exist.
+>
+> Example: `Unknown requirement 'auth.token.validaton'. Did you mean 'auth.token.validation'?`
+
+r[lsp.diagnostics.unknown-prefix]
+The server MUST publish diagnostics for references using an unknown prefix, with severity `Error`.
+
+> r[lsp.diagnostics.unknown-prefix-message]
+> The diagnostic message MUST list the available prefixes from the configuration.
+>
+> Example: `Unknown prefix 'x'. Available prefixes: r, m, h2`
+
+r[lsp.diagnostics.unknown-verb]
+The server MUST publish diagnostics for references using an unknown verb, with severity `Warning`.
+
+r[lsp.diagnostics.duplicate-definition]
+The server MUST publish diagnostics for duplicate requirement definitions in spec files, with severity `Error`.
+
+r[lsp.diagnostics.orphaned]
+The server MAY publish diagnostics for requirement definitions that have no implementation references, with severity `Hint` or `Information`.
+
+r[lsp.diagnostics.on-change]
+Diagnostics MUST be updated when files are modified, using debouncing to avoid excessive recomputation.
+
+r[lsp.diagnostics.on-save]
+Diagnostics MUST be fully recomputed when files are saved.
+
+### Hover Information
+
+r[lsp.hover.req-reference]
+Hovering over a requirement reference in source code MUST display the requirement's full text from the specification.
+
+> r[lsp.hover.req-reference-format]
+> The hover content MUST be formatted as markdown, including the requirement ID as a heading and the requirement text as the body.
+>
+> Example:
+> ```markdown
+> ### auth.token.validation
+>
+> The system must validate tokens before granting access.
+> Validation includes checking expiration, signature, and issuer.
+> ```
+
+r[lsp.hover.req-definition]
+Hovering over a requirement definition in a spec file MUST display coverage information: implementation and verification reference counts with file locations.
+
+> r[lsp.hover.req-definition-format]
+> The hover content MUST show counts and locations for impl and verify references.
+>
+> Example:
+> ```markdown
+> ### auth.token.validation
+>
+> **Implementations:** 2
+> - src/auth/token.rs:42
+> - src/auth/jwt.rs:87
+>
+> **Tests:** 1
+> - tests/auth_test.rs:156
+> ```
+
+r[lsp.hover.prefix]
+Hovering over a prefix (e.g., `r` in `r[impl auth.token]`) MUST display the spec name and source URL if configured.
+
+### Go to Definition
+
+r[lsp.goto.ref-to-def]
+Go-to-definition on a requirement reference MUST navigate to the requirement definition in the specification file.
+
+r[lsp.goto.def-to-impl]
+Go-to-definition on a requirement definition MUST offer navigation to all implementation references (when multiple exist, show a picker).
+
+### Find References
+
+r[lsp.references.from-definition]
+Find-references on a requirement definition MUST return all impl, verify, depends, and related references across all implementation files.
+
+r[lsp.references.from-reference]
+Find-references on a requirement reference MUST return the definition location plus all other references to the same requirement.
+
+r[lsp.references.include-type]
+Reference results MUST indicate the reference type (impl, verify, depends, related) in the reference context.
+
+### Code Actions
+
+r[lsp.actions.create-requirement]
+When the cursor is on an undefined requirement reference, the server MUST offer a code action to create the requirement definition in the appropriate spec file.
+
+> r[lsp.actions.create-requirement-template]
+> The created requirement MUST be inserted as a blockquote at the end of the most appropriate section (matching the first segment of the requirement ID if possible).
+>
+> Example for `r[impl auth.token.new-feature]`:
+> ```markdown
+> > r[auth.token.new-feature]
+> > TODO: Define requirement
+> ```
+
+r[lsp.actions.copy-req-id]
+The server MUST offer a code action to copy the requirement ID to clipboard when the cursor is on a requirement definition or reference.
+
+r[lsp.actions.open-dashboard]
+The server MUST offer a code action to open the requirement in the tracey dashboard when the cursor is on a requirement definition or reference.
+
+### Completions
+
+r[lsp.completions.req-id]
+When typing inside `PREFIX[...]`, the server MUST provide completion suggestions for existing requirement IDs.
+
+> r[lsp.completions.req-id-fuzzy]
+> Completions MUST support fuzzy matching, allowing `auth.tok` to match `auth.token.validation`.
+
+> r[lsp.completions.req-id-preview]
+> Each completion item MUST include the requirement text as documentation, displayed in the completion detail popup.
+
+r[lsp.completions.verb]
+When typing a verb (after the prefix and opening bracket), the server MUST provide completions for valid verbs: `impl`, `verify`, `depends`, `related`.
+
+r[lsp.completions.trigger]
+Completions MUST be triggered automatically when typing inside brackets after a recognized prefix.
+
+### Document Symbols
+
+r[lsp.symbols.requirements]
+The server MUST provide document symbols for requirement definitions in spec files, enabling outline views and breadcrumb navigation.
+
+> r[lsp.symbols.hierarchy]
+> Requirement symbols MUST be nested under their containing markdown headings in the symbol hierarchy.
+
+r[lsp.symbols.references]
+The server MAY provide document symbols for requirement references in source files, showing which requirements are referenced in each file.
+
+### Workspace Symbols
+
+r[lsp.workspace-symbols.requirements]
+The server MUST support workspace symbol search for requirement IDs, enabling quick navigation to any requirement across all specs.
+
+### Semantic Tokens
+
+r[lsp.semantic-tokens.prefix]
+The server MAY provide semantic tokens for requirement prefixes, enabling editors to apply custom styling.
+
+r[lsp.semantic-tokens.verb]
+The server MAY provide semantic tokens for verbs (impl, verify, depends, related), enabling distinct styling per verb type.
+
+r[lsp.semantic-tokens.req-id]
+The server MAY provide semantic tokens for requirement IDs, enabling editors to distinguish valid from invalid IDs via styling.
+
+### Code Lens
+
+r[lsp.codelens.coverage]
+The server MAY provide code lens on requirement definitions showing inline coverage counts (e.g., "3 impls, 1 test").
+
+r[lsp.codelens.run-test]
+The server MAY provide code lens on verify references offering to run the associated test.
+
+## Zed Extension
+
+The tracey-zed extension integrates tracey with the Zed editor, providing requirement traceability features through the LSP server.
+
+### Extension Structure
+
+r[zed.extension.manifest]
+The extension MUST provide an `extension.toml` manifest declaring the extension name, version, and language server configuration.
+
+r[zed.extension.language-server]
+The extension MUST configure tracey as a language server, specifying supported file types and the command to start the LSP server.
+
+> r[zed.extension.language-server-config]
+> The language server configuration MUST include:
+> - Binary name or path to the tracey executable
+> - Arguments to start LSP mode (`lsp`)
+> - Supported file extensions (`.rs`, `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.go`, `.swift`, `.java`, `.md`)
+
+### File Type Support
+
+r[zed.filetypes.source]
+The extension MUST activate for source code files matching the implementation patterns in the tracey configuration.
+
+r[zed.filetypes.spec]
+The extension MUST activate for markdown files matching the spec patterns in the tracey configuration.
+
+r[zed.filetypes.config]
+The extension SHOULD activate for the tracey configuration file (`.config/tracey/config.kdl`).
+
+### LSP Feature Integration
+
+r[zed.lsp.diagnostics]
+Diagnostics from the tracey LSP MUST appear in Zed's diagnostics panel and inline in the editor.
+
+r[zed.lsp.hover]
+Hover information from the tracey LSP MUST appear in Zed's hover popover.
+
+r[zed.lsp.goto]
+Go-to-definition from the tracey LSP MUST work with Zed's standard go-to-definition keybinding.
+
+r[zed.lsp.references]
+Find-references from the tracey LSP MUST appear in Zed's references panel.
+
+r[zed.lsp.completions]
+Completions from the tracey LSP MUST appear in Zed's autocomplete menu.
+
+r[zed.lsp.actions]
+Code actions from the tracey LSP MUST appear in Zed's code actions menu.
+
+### Zed-Specific Features
+
+r[zed.outline.requirements]
+The extension SHOULD contribute to Zed's outline panel, showing requirement definitions in spec files as navigable symbols.
+
+r[zed.status.coverage]
+The extension MAY display coverage information in Zed's status bar for the current file or project.
+
+r[zed.commands.dashboard]
+The extension SHOULD provide a command to open the tracey dashboard for the current project.
+
+r[zed.commands.goto-requirement]
+The extension SHOULD provide a command to fuzzy-search and navigate to any requirement by ID.
+
+### Installation
+
+r[zed.install.extension-registry]
+The extension SHOULD be published to the Zed extension registry for easy installation via Zed's extension browser.
+
+r[zed.install.manual]
+The extension MUST support manual installation by cloning the repository into Zed's extensions directory.
+
+r[zed.install.binary]
+The extension MUST document how to install the tracey binary, which is required for the LSP server to function.
+
+> r[zed.install.binary-options]
+> Installation documentation MUST cover:
+> - Installing via cargo (`cargo install tracey`)
+> - Using pre-built binaries from releases
+> - Building from source

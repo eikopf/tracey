@@ -4,12 +4,12 @@ import { FileRef, html } from "../main";
 import type { CoverageViewProps } from "../types";
 import { getStatClass } from "../utils";
 
-// [impl dashboard.coverage.table]
-// [impl dashboard.coverage.filter-type]
-// [impl dashboard.coverage.filter-level]
-// [impl dashboard.coverage.stats]
-// [impl dashboard.coverage.req-links]
-// [impl dashboard.coverage.ref-links]
+// r[impl dashboard.coverage.table]
+// r[impl dashboard.coverage.filter-type]
+// r[impl dashboard.coverage.filter-level]
+// r[impl dashboard.coverage.stats]
+// r[impl dashboard.coverage.req-links]
+// r[impl dashboard.coverage.ref-links]
 export function CoverageView({
 	data,
 	search,

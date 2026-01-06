@@ -8,8 +8,8 @@ import { buildFileTree, getCoverageBadge, getStatClass, splitHighlightedHtml } f
 // Declare lucide as global
 declare const lucide: { createIcons: (opts?: { nodes?: NodeList }) => void };
 
-// [impl dashboard.sources.file-tree]
-// [impl dashboard.sources.tree-coverage]
+// r[impl dashboard.sources.file-tree]
+// r[impl dashboard.sources.tree-coverage]
 
 // File tree component
 interface FileTreeProps {
@@ -161,11 +161,11 @@ function FileTreeFile({ file, selected, onClick }: FileTreeFileProps) {
   `;
 }
 
-// [impl dashboard.sources.code-view]
-// [impl dashboard.sources.line-numbers]
-// [impl dashboard.sources.line-annotations]
-// [impl dashboard.sources.line-highlight]
-// [impl dashboard.sources.editor-open]
+// r[impl dashboard.sources.code-view]
+// r[impl dashboard.sources.line-numbers]
+// r[impl dashboard.sources.line-annotations]
+// r[impl dashboard.sources.line-highlight]
+// r[impl dashboard.sources.editor-open]
 // Code view component
 export interface CodeViewProps {
   file: FileContent;
@@ -276,7 +276,7 @@ export function CodeView({ file, config, selectedLine, selectedLineEnd, selected
   `;
 }
 
-// [impl dashboard.sources.rule-context]
+// r[impl dashboard.sources.req-context]
 export function SourcesView({
   data,
   forward,

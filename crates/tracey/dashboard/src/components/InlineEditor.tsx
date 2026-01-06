@@ -2,7 +2,9 @@
 // r[impl dashboard.editing.inline.vim-mode]
 // r[impl dashboard.editing.inline.codemirror]
 // r[impl dashboard.editing.inline.header]
+// r[impl dashboard.editing.inline.dimensions]
 // r[impl dashboard.editing.save.patch-file]
+// r[impl dashboard.editing.save.error-handling]
 // r[impl dashboard.editing.cancel.discard]
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../main";

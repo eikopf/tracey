@@ -229,6 +229,12 @@ declare const lucide: { createIcons: (opts?: { nodes?: NodeList }) => void };
 // r[impl dashboard.spec.heading-scroll]
 // r[impl dashboard.links.heading-links]
 // r[impl dashboard.links.spec-aware]
+// r[impl dashboard.editing.keyboard.navigation]
+// r[impl dashboard.editing.keyboard.next-req]
+// r[impl dashboard.editing.keyboard.prev-req]
+// r[impl dashboard.editing.keyboard.visual-focus]
+// r[impl dashboard.editing.keyboard.scope]
+// r[impl dashboard.editing.keyboard.open-editor]
 export function SpecView({
   config,
   version,
@@ -407,6 +413,114 @@ export function SpecView({
     }
   }, [processedContent, config]);
 
+  // Keyboard navigation: j/k to move between requirements
+  useEffect(() => {
+    if (!contentRef.current || !contentBodyRef.current) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if user is typing in an input/textarea or if modifiers are pressed
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey
+      ) {
+        return;
+      }
+
+      if (e.key !== "j" && e.key !== "k" && e.key !== "e") return;
+
+      const reqs = Array.from(
+        contentRef.current?.querySelectorAll(".req-container[id]") || []
+      ) as HTMLElement[];
+      if (reqs.length === 0) return;
+
+      // Find current requirement from hash or viewport position
+      const hash = window.location.hash.slice(1);
+      let currentIndex = -1;
+
+      // First try to find by hash
+      if (hash) {
+        currentIndex = reqs.findIndex((el) => el.id === hash);
+      }
+
+      // If not found by hash, find the first visible requirement
+      if (currentIndex === -1 && contentBodyRef.current) {
+        const scrollTop = contentBodyRef.current.scrollTop;
+        const viewportHeight = contentBodyRef.current.clientHeight;
+        const viewportMiddle = scrollTop + viewportHeight / 3;
+
+        for (let i = 0; i < reqs.length; i++) {
+          const rect = reqs[i].getBoundingClientRect();
+          const containerRect = contentBodyRef.current.getBoundingClientRect();
+          const elTop = rect.top - containerRect.top + scrollTop;
+
+          if (elTop >= viewportMiddle - 50) {
+            currentIndex = Math.max(0, i - 1);
+            break;
+          }
+        }
+        // If we scrolled past all, use the last one
+        if (currentIndex === -1) {
+          currentIndex = reqs.length - 1;
+        }
+      }
+
+      // Handle 'e' key - open editor for focused requirement
+      if (e.key === "e") {
+        if (currentIndex === -1) return;
+        e.preventDefault();
+        const focusedReq = reqs[currentIndex];
+        const editBadge = focusedReq.querySelector("button.req-badge.req-edit") as HTMLElement | null;
+        if (editBadge) {
+          editBadge.click();
+        }
+        return;
+      }
+
+      e.preventDefault();
+
+      // Calculate next index with wrapping
+      let nextIndex: number;
+      if (e.key === "j") {
+        // Next requirement, wrap to first
+        nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % reqs.length;
+      } else {
+        // Previous requirement, wrap to last
+        nextIndex =
+          currentIndex === -1
+            ? reqs.length - 1
+            : (currentIndex - 1 + reqs.length) % reqs.length;
+      }
+
+      const targetReq = reqs[nextIndex];
+      const reqId = targetReq.id;
+
+      // Update hash and scroll
+      history.pushState(null, "", `#${reqId}`);
+
+      // Remove focus class from all, add to target
+      for (const req of reqs) {
+        req.classList.remove("req-focused");
+      }
+      targetReq.classList.add("req-focused");
+
+      // Scroll to show the requirement at ~1/3 from top of viewport
+      const viewportHeight = contentBodyRef.current?.clientHeight || 0;
+      const targetScrollTop = targetReq.offsetTop - viewportHeight / 3;
+      contentBodyRef.current?.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: "smooth",
+      });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [processedContent]);
+
   const scrollToHeading = useCallback((slug: string) => {
     if (!contentRef.current || !contentBodyRef.current) return;
     const el = contentRef.current.querySelector(`[id="${slug}"]`);
@@ -526,6 +640,7 @@ export function SpecView({
         return;
       }
 
+      // r[impl dashboard.editing.activation.click]
       // Handle Edit badge clicks - mount inline editor
       const editBadge = target.closest("button.req-badge.req-edit") as HTMLElement | null;
       if (editBadge) {

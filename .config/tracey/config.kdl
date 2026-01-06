@@ -8,6 +8,7 @@ spec {
         include "crates/**/*.rs"
         include "crates/tracey/dashboard/src/**/*.ts"
         include "crates/tracey/dashboard/src/**/*.tsx"
+        include "crates/tracey/dashboard/src/**/*.css"
         include "../marq/**/*.rs"
         exclude "target/**"
         exclude "../marq/target/**"

@@ -122,7 +122,7 @@ function SearchResultItem({ result, isSelected, onSelect, onHover }: SearchResul
 }
 
 // r[impl dashboard.search.modal]
-// r[impl dashboard.search.rules]
+// r[impl dashboard.search.reqs]
 // r[impl dashboard.search.files]
 // r[impl dashboard.search.navigation]
 function SearchModal({ onClose, onSelect }: SearchModalProps) {
