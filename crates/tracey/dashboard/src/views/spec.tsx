@@ -168,13 +168,15 @@ function OutlineTree({
       // Aggregate coverage from this node and all descendants
       const coverage = aggregateCoverage(node);
       const showCoverage = coverage.total > 0;
+      const isComplete = coverage.total > 0 && coverage.implCount === coverage.total;
+      const isIncomplete = coverage.total > 0 && coverage.implCount < coverage.total;
 
       return html`
         <li
           key=${h.slug}
           class="toc-item depth-${depth} ${isActive ? "is-active" : ""} ${hasActiveChild
             ? "is-in-active-branch"
-            : ""}"
+            : ""} ${isComplete ? "is-complete" : ""} ${isIncomplete ? "is-incomplete" : ""}"
         >
           <div class="toc-row">
             <a href=${`/${specName}/${impl}/spec#${h.slug}`} class="toc-link"> ${h.title} </a>
