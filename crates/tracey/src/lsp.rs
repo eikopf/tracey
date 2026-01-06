@@ -278,6 +278,11 @@ impl LanguageServer for Backend {
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 // r[impl lsp.symbols.requirements]
                 document_symbol_provider: Some(OneOf::Left(true)),
+                // r[impl lsp.rename.req-id]
+                rename_provider: Some(OneOf::Right(RenameOptions {
+                    prepare_provider: Some(true),
+                    work_done_progress_options: Default::default(),
+                })),
                 // Sync full document content
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
@@ -783,6 +788,129 @@ impl LanguageServer for Backend {
             Ok(None)
         } else {
             Ok(Some(symbols))
+        }
+    }
+
+    // r[impl lsp.rename.prepare]
+    async fn prepare_rename(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> LspResult<Option<PrepareRenameResponse>> {
+        let uri = &params.text_document.uri;
+        let position = params.position;
+
+        let Some((req_id, range)) = self.find_req_at_position(uri, position) else {
+            return Ok(None);
+        };
+
+        // Check if requirement exists
+        if self.find_requirement(&req_id).is_none() {
+            return Ok(None);
+        }
+
+        // Return the range of just the requirement ID (not the full r[...] reference)
+        // For now, return the full range - could be refined to just the ID portion
+        Ok(Some(PrepareRenameResponse::Range(range)))
+    }
+
+    // r[impl lsp.rename.req-id]
+    async fn rename(&self, params: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+        let new_name = &params.new_name;
+
+        let Some((req_id, _range)) = self.find_req_at_position(uri, position) else {
+            return Ok(None);
+        };
+
+        let Some(info) = self.find_requirement(&req_id) else {
+            return Ok(None);
+        };
+
+        // r[impl lsp.rename.validation]
+        // Validate new name format (should be dotted identifier)
+        if !new_name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_')
+        {
+            return Err(tower_lsp::jsonrpc::Error::invalid_params(
+                "Requirement ID must only contain alphanumeric characters, dots, hyphens, and underscores",
+            ));
+        }
+
+        if !new_name.contains('.') {
+            return Err(tower_lsp::jsonrpc::Error::invalid_params(
+                "Requirement ID must contain at least one dot (e.g., 'section.name')",
+            ));
+        }
+
+        // Check if new name conflicts with existing requirement
+        if self.find_requirement(new_name).is_some() {
+            return Err(tower_lsp::jsonrpc::Error::invalid_params(format!(
+                "Requirement '{}' already exists",
+                new_name
+            )));
+        }
+
+        let mut changes: std::collections::HashMap<Url, Vec<TextEdit>> =
+            std::collections::HashMap::new();
+
+        // Helper to add a text edit
+        let mut add_edit = |file: &str, line: usize, old_id: &str, new_id: &str| {
+            let path = self.project_root.join(file);
+            if let Ok(uri) = Url::from_file_path(&path)
+                && let Ok(content) = std::fs::read_to_string(&path)
+                && let Some(file_line) = content.lines().nth(line.saturating_sub(1))
+                && let Some(id_pos) = file_line.find(old_id)
+            {
+                let line_num = line.saturating_sub(1) as u32;
+                let edit = TextEdit {
+                    range: Range {
+                        start: Position {
+                            line: line_num,
+                            character: id_pos as u32,
+                        },
+                        end: Position {
+                            line: line_num,
+                            character: (id_pos + old_id.len()) as u32,
+                        },
+                    },
+                    new_text: new_id.to_string(),
+                };
+                changes.entry(uri).or_default().push(edit);
+            }
+        };
+
+        // Add edit for the definition in spec file
+        if !info.source_file.is_empty()
+            && let Some(line) = info.source_line
+        {
+            add_edit(&info.source_file, line, &req_id, new_name);
+        }
+
+        // Add edits for all impl refs
+        for r in &info.impl_refs {
+            add_edit(&r.file, r.line, &req_id, new_name);
+        }
+
+        // Add edits for all verify refs
+        for r in &info.verify_refs {
+            add_edit(&r.file, r.line, &req_id, new_name);
+        }
+
+        // Add edits for all depends refs
+        for r in &info.depends_refs {
+            add_edit(&r.file, r.line, &req_id, new_name);
+        }
+
+        if changes.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }))
         }
     }
 }
