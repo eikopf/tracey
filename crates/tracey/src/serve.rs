@@ -463,7 +463,6 @@ pub async fn build_dashboard_data(
     quiet: bool,
 ) -> Result<DashboardData> {
     use tracey_core::WalkSources;
-    use tracey_core::code_units::extract_rust;
 
     let abs_root = project_root
         .canonicalize()
@@ -707,7 +706,7 @@ pub async fn build_dashboard_data(
                         // Use canonicalized path as key for consistent lookups
                         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-                        let code_units = extract_rust(path, &content);
+                        let code_units = tracey_core::code_units::extract(path, &content);
                         if !code_units.is_empty() {
                             impl_code_units.insert(canonical.clone(), code_units.units);
                         }

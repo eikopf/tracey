@@ -144,6 +144,20 @@ impl CodeUnits {
     }
 }
 
+/// Extract code units from source code, auto-detecting language from file extension
+pub fn extract(path: &Path, source: &str) -> CodeUnits {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    match ext {
+        "rs" => extract_rust(path, source),
+        "swift" => extract_swift(path, source),
+        "go" => extract_go(path, source),
+        "java" => extract_java(path, source),
+        "py" => extract_python(path, source),
+        "ts" | "tsx" | "js" | "jsx" | "mts" | "cts" => extract_typescript(path, source),
+        _ => CodeUnits::new(),
+    }
+}
+
 /// Extract code units from Rust source code
 pub fn extract_rust(path: &Path, source: &str) -> CodeUnits {
     let mut parser = Parser::new();
