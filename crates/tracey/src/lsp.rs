@@ -276,6 +276,8 @@ impl LanguageServer for Backend {
                 references_provider: Some(OneOf::Left(true)),
                 // r[impl lsp.workspace-symbols.requirements]
                 workspace_symbol_provider: Some(OneOf::Left(true)),
+                // r[impl lsp.symbols.requirements]
+                document_symbol_provider: Some(OneOf::Left(true)),
                 // Sync full document content
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
@@ -638,6 +640,91 @@ impl LanguageServer for Backend {
             range,
             kind: Some(DocumentHighlightKind::TEXT),
         }]))
+    }
+
+    // r[impl lsp.symbols.requirements]
+    // r[impl lsp.symbols.references]
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> LspResult<Option<DocumentSymbolResponse>> {
+        let uri = params.text_document.uri.to_string();
+
+        let docs = self.documents.read().ok();
+        let content = docs.as_ref().and_then(|d| d.get(&uri));
+
+        let Some(content) = content else {
+            return Ok(None);
+        };
+
+        let mut symbols = Vec::new();
+
+        // Scan for requirement references: prefix[verb? req.id]
+        // Pattern: word followed by [ then content then ]
+        for (line_num, line) in content.lines().enumerate() {
+            let mut i = 0;
+            let chars: Vec<char> = line.chars().collect();
+
+            while i < chars.len() {
+                // Look for opening bracket preceded by alphanumeric
+                if chars[i] == '[' && i > 0 && chars[i - 1].is_alphanumeric() {
+                    // Find start of prefix
+                    let mut prefix_start = i - 1;
+                    while prefix_start > 0 && chars[prefix_start - 1].is_alphanumeric() {
+                        prefix_start -= 1;
+                    }
+
+                    // Find closing bracket
+                    if let Some(close_pos) = chars[i + 1..].iter().position(|&c| c == ']') {
+                        let close_idx = i + 1 + close_pos;
+                        let inner: String = chars[i + 1..close_idx].iter().collect();
+
+                        // Parse inner content - might be "verb req.id" or just "req.id"
+                        let req_id = if let Some(space_pos) = inner.find(' ') {
+                            inner[space_pos + 1..].trim().to_string()
+                        } else {
+                            inner.trim().to_string()
+                        };
+
+                        if !req_id.is_empty() && req_id.contains('.') {
+                            #[allow(deprecated)]
+                            symbols.push(SymbolInformation {
+                                name: req_id,
+                                kind: SymbolKind::CONSTANT,
+                                tags: None,
+                                deprecated: None,
+                                location: Location {
+                                    uri: Url::parse(&uri)
+                                        .unwrap_or_else(|_| Url::parse("file:///unknown").unwrap()),
+                                    range: Range {
+                                        start: Position {
+                                            line: line_num as u32,
+                                            character: prefix_start as u32,
+                                        },
+                                        end: Position {
+                                            line: line_num as u32,
+                                            character: (close_idx + 1) as u32,
+                                        },
+                                    },
+                                },
+                                container_name: None,
+                            });
+                        }
+
+                        i = close_idx + 1;
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+        }
+
+        if symbols.is_empty() {
+            Ok(None)
+        } else {
+            #[allow(deprecated)]
+            Ok(Some(DocumentSymbolResponse::Flat(symbols)))
+        }
     }
 
     // r[impl lsp.workspace-symbols.requirements]
