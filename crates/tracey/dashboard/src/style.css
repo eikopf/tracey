@@ -4,9 +4,9 @@
     --bg-secondary: light-dark(#ffffff, #1a1b26);
     --bg-sidebar: light-dark(#f3f4f6, #16171d);
     --fg: light-dark(#1a1b26, #c0caf5);
-    --fg-muted: light-dark(#4b5563, #9aa5ce);
-    --fg-dim: light-dark(#6b7280, #727ca7);
-    --border: light-dark(#e5e5e5, #292e42);
+    --fg-muted: light-dark(#4b5563, #a9b8d6);
+    --fg-dim: light-dark(#6b7280, #8a96bd);
+    --border: light-dark(#e5e5e5, #3b4261);
     --hover: light-dark(#f0f0f2, #1f2335);
     --hover-subtle: light-dark(#f8f8fa, #1a1d2a);
     --accent: var(--arb-tu);
@@ -876,8 +876,10 @@ a.annotation-badge:hover {
 .markdown blockquote {
     border-left: 3px solid var(--accent);
     margin: 1rem 0;
-    padding-left: 1rem;
-    color: var(--fg-muted);
+    padding: 0.75rem 1rem;
+    background: var(--hover-subtle);
+    border-radius: 0 0.25rem 0.25rem 0;
+    color: var(--fg);
 }
 
 .markdown table {
