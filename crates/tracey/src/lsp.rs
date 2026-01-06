@@ -274,6 +274,8 @@ impl LanguageServer for Backend {
                 implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
                 // r[impl lsp.references.from-reference]
                 references_provider: Some(OneOf::Left(true)),
+                // r[impl lsp.workspace-symbols.requirements]
+                workspace_symbol_provider: Some(OneOf::Left(true)),
                 // Sync full document content
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
@@ -636,5 +638,64 @@ impl LanguageServer for Backend {
             range,
             kind: Some(DocumentHighlightKind::TEXT),
         }]))
+    }
+
+    // r[impl lsp.workspace-symbols.requirements]
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> LspResult<Option<Vec<SymbolInformation>>> {
+        let query = params.query.to_lowercase();
+        let data = self.data();
+
+        let mut symbols = Vec::new();
+
+        for spec_data in data.forward_by_impl.values() {
+            for rule in &spec_data.rules {
+                // Match if query is empty or requirement ID contains query
+                if (query.is_empty() || rule.id.to_lowercase().contains(&query))
+                    && let Some(ref source_file) = rule.source_file
+                    && let Ok(uri) = Url::from_file_path(self.project_root.join(source_file))
+                {
+                    let line = rule
+                        .source_line
+                        .map(|l| l.saturating_sub(1) as u32)
+                        .unwrap_or(0);
+                    let character = rule
+                        .source_column
+                        .map(|c| c.saturating_sub(1) as u32)
+                        .unwrap_or(0);
+
+                    #[allow(deprecated)]
+                    // SymbolInformation::deprecated is deprecated but required
+                    symbols.push(SymbolInformation {
+                        name: rule.id.clone(),
+                        kind: SymbolKind::CONSTANT, // Using CONSTANT for requirements
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri,
+                            range: Range {
+                                start: Position { line, character },
+                                end: Position { line, character },
+                            },
+                        },
+                        container_name: Some("requirements".to_string()),
+                    });
+                }
+            }
+        }
+
+        // Sort by ID for consistent ordering
+        symbols.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // Limit results to avoid overwhelming the UI
+        symbols.truncate(100);
+
+        if symbols.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(symbols))
+        }
     }
 }
