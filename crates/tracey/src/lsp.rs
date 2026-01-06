@@ -266,6 +266,8 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 // r[impl lsp.goto.ref-to-def]
                 definition_provider: Some(OneOf::Left(true)),
+                // r[impl lsp.highlight.full-range]
+                document_highlight_provider: Some(OneOf::Left(true)),
                 // Sync full document content
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
@@ -488,5 +490,24 @@ impl LanguageServer for Backend {
                 end: Position { line, character },
             },
         })))
+    }
+
+    // r[impl lsp.highlight.full-range]
+    async fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> LspResult<Option<Vec<DocumentHighlight>>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        // Find requirement at position and return its full range
+        let Some((_req_id, range)) = self.find_req_at_position(uri, position) else {
+            return Ok(None);
+        };
+
+        Ok(Some(vec![DocumentHighlight {
+            range,
+            kind: Some(DocumentHighlightKind::TEXT),
+        }]))
     }
 }
