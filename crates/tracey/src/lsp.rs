@@ -72,6 +72,16 @@ struct Backend {
     documents: std::sync::RwLock<HashMap<String, String>>,
 }
 
+/// Result of finding a requirement at a position
+struct ReqAtPosition {
+    /// The requirement ID (e.g., "config.path.default")
+    id: String,
+    /// Range of the full reference including prefix and brackets (e.g., "r[config.path.default]")
+    full_range: Range,
+    /// Range of just the requirement ID (e.g., "config.path.default")
+    id_range: Range,
+}
+
 impl Backend {
     fn new(
         client: Client,
@@ -133,7 +143,7 @@ impl Backend {
     }
 
     /// Find requirement reference at position in document
-    fn find_req_at_position(&self, uri: &Url, position: Position) -> Option<(String, Range)> {
+    fn find_req_at_position(&self, uri: &Url, position: Position) -> Option<ReqAtPosition> {
         let docs = self.documents.read().ok()?;
         let content = docs.get(uri.as_str())?;
 
@@ -173,13 +183,18 @@ impl Backend {
                     let inner = &line[bracket_open + 1..bracket_end];
 
                     // Parse: might be "impl foo.bar" or just "foo.bar"
-                    let req_id = if let Some(space_pos) = inner.find(' ') {
-                        inner[space_pos + 1..].trim()
+                    // For rename, we need to know where the ID starts within the inner content
+                    let (req_id, id_offset) = if let Some(space_pos) = inner.find(' ') {
+                        (inner[space_pos + 1..].trim(), space_pos + 1)
                     } else {
-                        inner.trim()
+                        (inner.trim(), 0)
                     };
 
-                    let range = Range {
+                    // Calculate ranges
+                    let id_start = bracket_open + 1 + id_offset;
+                    let id_end = id_start + req_id.len();
+
+                    let full_range = Range {
                         start: Position {
                             line: position.line,
                             character: bracket_start as u32,
@@ -190,7 +205,22 @@ impl Backend {
                         },
                     };
 
-                    return Some((req_id.to_string(), range));
+                    let id_range = Range {
+                        start: Position {
+                            line: position.line,
+                            character: id_start as u32,
+                        },
+                        end: Position {
+                            line: position.line,
+                            character: id_end as u32,
+                        },
+                    };
+
+                    return Some(ReqAtPosition {
+                        id: req_id.to_string(),
+                        full_range,
+                        id_range,
+                    });
                 }
                 in_bracket = false;
             }
@@ -404,11 +434,11 @@ impl LanguageServer for Backend {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        let Some((req_id, range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
-        if let Some(info) = self.find_requirement(&req_id) {
+        if let Some(info) = self.find_requirement(&req.id) {
             // Strip HTML for markdown display
             let plain_text = info
                 .html
@@ -450,7 +480,7 @@ impl LanguageServer for Backend {
                     kind: MarkupKind::Markdown,
                     value: content,
                 }),
-                range: Some(range),
+                range: Some(req.full_range),
             }));
         }
 
@@ -459,9 +489,9 @@ impl LanguageServer for Backend {
         Ok(Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: format!("⚠️ **Unknown requirement:** `{}`", req_id),
+                value: format!("⚠️ **Unknown requirement:** `{}`", req.id),
             }),
-            range: Some(range),
+            range: Some(req.full_range),
         }))
     }
 
@@ -473,11 +503,11 @@ impl LanguageServer for Backend {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        let Some((req_id, _range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
-        let Some(info) = self.find_requirement(&req_id) else {
+        let Some(info) = self.find_requirement(&req.id) else {
             return Ok(None);
         };
 
@@ -516,11 +546,11 @@ impl LanguageServer for Backend {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        let Some((req_id, _range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
-        let Some(info) = self.find_requirement(&req_id) else {
+        let Some(info) = self.find_requirement(&req.id) else {
             return Ok(None);
         };
 
@@ -566,11 +596,11 @@ impl LanguageServer for Backend {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
-        let Some((req_id, _range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
-        let Some(info) = self.find_requirement(&req_id) else {
+        let Some(info) = self.find_requirement(&req.id) else {
             return Ok(None);
         };
 
@@ -637,12 +667,12 @@ impl LanguageServer for Backend {
         let position = params.text_document_position_params.position;
 
         // Find requirement at position and return its full range
-        let Some((_req_id, range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
         Ok(Some(vec![DocumentHighlight {
-            range,
+            range: req.full_range,
             kind: Some(DocumentHighlightKind::TEXT),
         }]))
     }
@@ -799,18 +829,18 @@ impl LanguageServer for Backend {
         let uri = &params.text_document.uri;
         let position = params.position;
 
-        let Some((req_id, range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
         // Check if requirement exists
-        if self.find_requirement(&req_id).is_none() {
+        if self.find_requirement(&req.id).is_none() {
             return Ok(None);
         }
 
         // Return the range of just the requirement ID (not the full r[...] reference)
-        // For now, return the full range - could be refined to just the ID portion
-        Ok(Some(PrepareRenameResponse::Range(range)))
+        // This way the editor will pre-fill only the ID text, and the user types the new ID directly
+        Ok(Some(PrepareRenameResponse::Range(req.id_range)))
     }
 
     // r[impl lsp.rename.req-id]
@@ -819,11 +849,11 @@ impl LanguageServer for Backend {
         let position = params.text_document_position.position;
         let new_name = &params.new_name;
 
-        let Some((req_id, _range)) = self.find_req_at_position(uri, position) else {
+        let Some(req) = self.find_req_at_position(uri, position) else {
             return Ok(None);
         };
 
-        let Some(info) = self.find_requirement(&req_id) else {
+        let Some(info) = self.find_requirement(&req.id) else {
             return Ok(None);
         };
 
@@ -885,22 +915,22 @@ impl LanguageServer for Backend {
         if !info.source_file.is_empty()
             && let Some(line) = info.source_line
         {
-            add_edit(&info.source_file, line, &req_id, new_name);
+            add_edit(&info.source_file, line, &req.id, new_name);
         }
 
         // Add edits for all impl refs
         for r in &info.impl_refs {
-            add_edit(&r.file, r.line, &req_id, new_name);
+            add_edit(&r.file, r.line, &req.id, new_name);
         }
 
         // Add edits for all verify refs
         for r in &info.verify_refs {
-            add_edit(&r.file, r.line, &req_id, new_name);
+            add_edit(&r.file, r.line, &req.id, new_name);
         }
 
         // Add edits for all depends refs
         for r in &info.depends_refs {
-            add_edit(&r.file, r.line, &req_id, new_name);
+            add_edit(&r.file, r.line, &req.id, new_name);
         }
 
         if changes.is_empty() {

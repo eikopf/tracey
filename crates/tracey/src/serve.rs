@@ -242,7 +242,6 @@ fn devicon_class(path: &str) -> Option<&'static str> {
 // r[impl markdown.html.div] - rule wrapped in <div class="rule-container">
 // r[impl markdown.html.anchor] - div has id="r-{rule.id}"
 // r[impl markdown.html.link] - rule-badge links to the rule
-// r[impl markdown.html.wbr] - dots followed by <wbr> for line breaking
 impl ReqHandler for TraceyRuleHandler {
     fn start<'a>(
         &'a self,

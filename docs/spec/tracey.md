@@ -370,13 +370,6 @@ Requirement references in comments associated with a code unit MUST be extracted
 > <a href="#r-user.login.flow">user.<wbr>login.<wbr>flow</a>
 > ```
 
-> r[markdown.html.wbr]
-> Dots in the displayed requirement ID SHOULD be followed by `<wbr>` elements to allow line breaking.
->
-> ```html
-> database.<wbr>connection.<wbr>pool
-> ```
-
 ## Configuration
 
 r[config.format.kdl]
