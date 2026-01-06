@@ -482,8 +482,21 @@ export function SpecView({
             .then((res) => res.json())
             .then((data: FileContent) => {
               console.log("Setting preview modal");
-              // Find the code unit containing this line
-              const unit = data.units.find((u) => line >= u.startLine && line <= u.endLine);
+              // [impl code-unit.nested.smallest]
+              // Find the smallest code unit containing this line.
+              // Server-side code unit extraction includes preceding comments in startLine,
+              // so a simple containment check works correctly.
+              const unit = data.units
+                .filter((u) => line >= u.startLine && line <= u.endLine)
+                .reduce<typeof data.units[0] | null>(
+                  (smallest, current) => {
+                    if (!smallest) return current;
+                    const smallestSize = smallest.endLine - smallest.startLine;
+                    const currentSize = current.endLine - current.startLine;
+                    return currentSize < smallestSize ? current : smallest;
+                  },
+                  null
+                );
               const lineEnd = unit ? unit.endLine : line;
               setPreviewModal({ fileData: data, line, lineEnd, type });
             })

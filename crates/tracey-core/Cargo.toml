@@ -19,7 +19,15 @@ rustdoc-args = ["--html-in-header", "arborium-header.html"]
 default = ["walk", "parallel"]
 walk = ["dep:ignore"]
 parallel = ["dep:rayon"]
-reverse = ["dep:arborium", "dep:arborium-rust"]
+reverse = [
+    "dep:arborium",
+    "dep:arborium-rust",
+    "dep:arborium-swift",
+    "dep:arborium-go",
+    "dep:arborium-java",
+    "dep:arborium-python",
+    "dep:arborium-typescript",
+]
 
 [dependencies]
 facet = { workspace = true }
@@ -31,3 +39,8 @@ ignore = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 arborium = { workspace = true, optional = true }
 arborium-rust = { workspace = true, optional = true }
+arborium-swift = { workspace = true, optional = true }
+arborium-go = { workspace = true, optional = true }
+arborium-java = { workspace = true, optional = true }
+arborium-python = { workspace = true, optional = true }
+arborium-typescript = { workspace = true, optional = true }

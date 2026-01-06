@@ -4037,7 +4037,12 @@ name = "tracey-core"
 version = "1.0.0"
 dependencies = [
  "arborium",
+ "arborium-go",
+ "arborium-java",
+ "arborium-python",
  "arborium-rust",
+ "arborium-swift",
+ "arborium-typescript",
  "eyre",
  "facet",
  "ignore",

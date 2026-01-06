@@ -50,6 +50,11 @@ arborium = { version = "2", features = [
     "lang-swift", "lang-elixir", "lang-haskell", "lang-ocaml", "lang-lua", "lang-php", "lang-r",
 ] }
 arborium-rust = "2"
+arborium-swift = "2"
+arborium-go = "2"
+arborium-java = "2"
+arborium-python = "2"
+arborium-typescript = "2"
 
 # HTTP server for serve command
 axum = { version = "0.8", features = ["ws"] }

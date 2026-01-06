@@ -298,6 +298,24 @@ Implementation references MAY be located in different crates or workspaces outsi
 > r[ref.cross-workspace.graceful-degradation]
 > When implementation files are missing, tracey MUST still display available data (requirement definitions, other implementations) and MUST NOT crash or fail to start.
 
+## Code Unit Extraction
+
+Code units are semantic units of code (functions, structs, enums, traits, impl blocks, modules, etc.) that are used for reverse traceability—tracking what percentage of code is linked to specification requirements.
+
+r[code-unit.definition]
+A code unit MUST be identified by its kind (function, struct, enum, trait, impl, module, const, static, type alias, macro), optional name, file path, start line, end line, and associated requirement references.
+
+r[code-unit.boundary.include-comments]
+When a code unit has associated comments (preceding line comments, block comments, or attributes), the code unit's `start_line` MUST include those comments. Comments are considered "associated" with a code unit if they immediately precede it with no intervening non-comment, non-attribute nodes.
+
+This ensures that when a user clicks on a requirement reference badge pointing to a comment line, the highlighted range correctly encompasses the entire code unit including its documentation.
+
+r[code-unit.nested.smallest]
+When multiple code units contain a given line (e.g., a function inside a module), the annotation MUST be associated with the smallest (most specific) code unit for coverage computation. For example, if `mod tests {}` spans lines 100-500 and `fn test_foo()` spans lines 120-130, a reference on line 125 MUST be counted as covering `fn test_foo()`, not `mod tests {}`.
+
+r[code-unit.refs.extraction]
+Requirement references in comments associated with a code unit MUST be extracted and stored with that code unit for coverage computation.
+
 ## Markdown Processing
 
 ### HTML Output

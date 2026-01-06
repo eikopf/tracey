@@ -159,81 +159,279 @@ pub fn extract_rust(path: &Path, source: &str) -> CodeUnits {
     let root = tree.root_node();
 
     // Walk the tree and extract code units
-    extract_units_recursive(path, source, root, &mut units);
+    extract_units_recursive(path, source, root, &mut units, rust_node_kind);
 
     units
 }
 
-fn extract_units_recursive(path: &Path, source: &str, node: Node, units: &mut CodeUnits) {
+/// Extract code units from Swift source code
+pub fn extract_swift(path: &Path, source: &str) -> CodeUnits {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&arborium_swift::language().into())
+        .expect("Failed to load Swift grammar");
+
+    let Some(tree) = parser.parse(source, None) else {
+        return CodeUnits::new();
+    };
+
+    let mut units = CodeUnits::new();
+    let root = tree.root_node();
+    extract_units_recursive(path, source, root, &mut units, swift_node_kind);
+    units
+}
+
+/// Extract code units from Go source code
+pub fn extract_go(path: &Path, source: &str) -> CodeUnits {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&arborium_go::language().into())
+        .expect("Failed to load Go grammar");
+
+    let Some(tree) = parser.parse(source, None) else {
+        return CodeUnits::new();
+    };
+
+    let mut units = CodeUnits::new();
+    let root = tree.root_node();
+    extract_units_recursive(path, source, root, &mut units, go_node_kind);
+    units
+}
+
+/// Extract code units from Java source code
+pub fn extract_java(path: &Path, source: &str) -> CodeUnits {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&arborium_java::language().into())
+        .expect("Failed to load Java grammar");
+
+    let Some(tree) = parser.parse(source, None) else {
+        return CodeUnits::new();
+    };
+
+    let mut units = CodeUnits::new();
+    let root = tree.root_node();
+    extract_units_recursive(path, source, root, &mut units, java_node_kind);
+    units
+}
+
+/// Extract code units from Python source code
+pub fn extract_python(path: &Path, source: &str) -> CodeUnits {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&arborium_python::language().into())
+        .expect("Failed to load Python grammar");
+
+    let Some(tree) = parser.parse(source, None) else {
+        return CodeUnits::new();
+    };
+
+    let mut units = CodeUnits::new();
+    let root = tree.root_node();
+    extract_units_recursive(path, source, root, &mut units, python_node_kind);
+    units
+}
+
+/// Extract code units from TypeScript source code
+pub fn extract_typescript(path: &Path, source: &str) -> CodeUnits {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&arborium_typescript::language().into())
+        .expect("Failed to load TypeScript grammar");
+
+    let Some(tree) = parser.parse(source, None) else {
+        return CodeUnits::new();
+    };
+
+    let mut units = CodeUnits::new();
+    let root = tree.root_node();
+    extract_units_recursive(path, source, root, &mut units, typescript_node_kind);
+    units
+}
+
+// Language-specific node kind mappings
+
+fn rust_node_kind(kind: &str) -> Option<CodeUnitKind> {
+    match kind {
+        "function_item" => Some(CodeUnitKind::Function),
+        "struct_item" => Some(CodeUnitKind::Struct),
+        "enum_item" => Some(CodeUnitKind::Enum),
+        "trait_item" => Some(CodeUnitKind::Trait),
+        "impl_item" => Some(CodeUnitKind::Impl),
+        "mod_item" => Some(CodeUnitKind::Module),
+        "const_item" => Some(CodeUnitKind::Const),
+        "static_item" => Some(CodeUnitKind::Static),
+        "type_item" => Some(CodeUnitKind::TypeAlias),
+        "macro_definition" => Some(CodeUnitKind::Macro),
+        _ => None,
+    }
+}
+
+fn swift_node_kind(kind: &str) -> Option<CodeUnitKind> {
+    match kind {
+        "function_declaration" => Some(CodeUnitKind::Function),
+        "class_declaration" => Some(CodeUnitKind::Struct), // Swift class as struct-like
+        "struct_declaration" => Some(CodeUnitKind::Struct),
+        "enum_declaration" => Some(CodeUnitKind::Enum),
+        "protocol_declaration" => Some(CodeUnitKind::Trait), // Swift protocol as trait-like
+        "extension_declaration" => Some(CodeUnitKind::Impl), // Swift extension as impl-like
+        _ => None,
+    }
+}
+
+fn go_node_kind(kind: &str) -> Option<CodeUnitKind> {
+    match kind {
+        "function_declaration" => Some(CodeUnitKind::Function),
+        "method_declaration" => Some(CodeUnitKind::Function),
+        "type_declaration" => Some(CodeUnitKind::Struct), // Could be struct or interface
+        _ => None,
+    }
+}
+
+fn java_node_kind(kind: &str) -> Option<CodeUnitKind> {
+    match kind {
+        "method_declaration" => Some(CodeUnitKind::Function),
+        "constructor_declaration" => Some(CodeUnitKind::Function),
+        "class_declaration" => Some(CodeUnitKind::Struct),
+        "interface_declaration" => Some(CodeUnitKind::Trait),
+        "enum_declaration" => Some(CodeUnitKind::Enum),
+        _ => None,
+    }
+}
+
+fn python_node_kind(kind: &str) -> Option<CodeUnitKind> {
+    match kind {
+        "function_definition" => Some(CodeUnitKind::Function),
+        "class_definition" => Some(CodeUnitKind::Struct),
+        _ => None,
+    }
+}
+
+fn typescript_node_kind(kind: &str) -> Option<CodeUnitKind> {
+    match kind {
+        "function_declaration" => Some(CodeUnitKind::Function),
+        "method_definition" => Some(CodeUnitKind::Function),
+        "class_declaration" => Some(CodeUnitKind::Struct),
+        "interface_declaration" => Some(CodeUnitKind::Trait),
+        "type_alias_declaration" => Some(CodeUnitKind::TypeAlias),
+        "enum_declaration" => Some(CodeUnitKind::Enum),
+        _ => None,
+    }
+}
+
+fn extract_units_recursive<F>(
+    path: &Path,
+    source: &str,
+    node: Node,
+    units: &mut CodeUnits,
+    node_kind_mapper: F,
+) where
+    F: Fn(&str) -> Option<CodeUnitKind> + Copy,
+{
     // Check if this node is a code unit we care about
-    if let Some(unit) = node_to_code_unit(path, source, node) {
+    if let Some(unit) = node_to_code_unit(path, source, node, &node_kind_mapper) {
         units.units.push(unit);
     }
 
     // Recurse into children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        extract_units_recursive(path, source, child, units);
+        extract_units_recursive(path, source, child, units, node_kind_mapper);
     }
 }
 
-fn node_to_code_unit(path: &Path, source: &str, node: Node) -> Option<CodeUnit> {
-    let kind = match node.kind() {
-        "function_item" => CodeUnitKind::Function,
-        "struct_item" => CodeUnitKind::Struct,
-        "enum_item" => CodeUnitKind::Enum,
-        "trait_item" => CodeUnitKind::Trait,
-        "impl_item" => CodeUnitKind::Impl,
-        "mod_item" => CodeUnitKind::Module,
-        "const_item" => CodeUnitKind::Const,
-        "static_item" => CodeUnitKind::Static,
-        "type_item" => CodeUnitKind::TypeAlias,
-        "macro_definition" => CodeUnitKind::Macro,
-        _ => return None,
-    };
+// r[impl code-unit.definition]
+fn node_to_code_unit<F>(
+    path: &Path,
+    source: &str,
+    node: Node,
+    node_kind_mapper: &F,
+) -> Option<CodeUnit>
+where
+    F: Fn(&str) -> Option<CodeUnitKind>,
+{
+    let kind = node_kind_mapper(node.kind())?;
 
     // Get the name if available
     let name = get_node_name(source, node);
 
+    // r[impl code-unit.refs.extraction]
+    // r[impl code-unit.boundary.include-comments]
     // Find associated comments and extract requirement references
-    let req_refs = extract_req_refs_from_comments(source, node);
+    // Also get the earliest comment line to extend the code unit's range
+    let (req_refs, comment_start) = extract_req_refs_from_comments(source, node);
+
+    // The code unit starts at the earliest associated comment (if any),
+    // otherwise at the node itself
+    let start_line = comment_start.unwrap_or_else(|| node.start_position().row + 1);
+    let start_byte = if comment_start.is_some() {
+        // Find the byte offset of the comment start line
+        find_line_start_byte(source, start_line)
+    } else {
+        node.start_byte()
+    };
 
     Some(CodeUnit {
         kind,
         name,
         file: path.to_path_buf(),
-        start_line: node.start_position().row + 1,
+        start_line,
         end_line: node.end_position().row + 1,
-        start_byte: node.start_byte(),
+        start_byte,
         end_byte: node.end_byte(),
         req_refs,
     })
 }
 
+/// Find the byte offset where a given line (1-indexed) starts
+fn find_line_start_byte(source: &str, line: usize) -> usize {
+    let mut current_line = 1;
+    for (byte_pos, ch) in source.char_indices() {
+        if current_line == line {
+            return byte_pos;
+        }
+        if ch == '\n' {
+            current_line += 1;
+        }
+    }
+    0
+}
+
 fn get_node_name(source: &str, node: Node) -> Option<String> {
-    // Different node types have the name in different child fields
-    let name_node = match node.kind() {
+    // Try common field names used across languages for the identifier/name
+    // Most tree-sitter grammars use "name" for the identifier field
+    let name_node = node
+        .child_by_field_name("name")
+        .or_else(|| node.child_by_field_name("type")) // For impl blocks
+        .or_else(|| {
+            // For some languages, the first identifier child is the name
+            let mut cursor = node.walk();
+            node.children(&mut cursor)
+                .find(|c| c.kind() == "identifier" || c.kind() == "type_identifier")
+        });
+
+    // Legacy Rust-specific handling (kept for compatibility)
+    let name_node = name_node.or_else(|| match node.kind() {
         "function_item" => node.child_by_field_name("name"),
         "struct_item" => node.child_by_field_name("name"),
         "enum_item" => node.child_by_field_name("name"),
         "trait_item" => node.child_by_field_name("name"),
-        "impl_item" => {
-            // For impl, get the type being implemented
-            node.child_by_field_name("type")
-        }
+        "impl_item" => node.child_by_field_name("type"),
         "mod_item" => node.child_by_field_name("name"),
         "const_item" => node.child_by_field_name("name"),
         "static_item" => node.child_by_field_name("name"),
         "type_item" => node.child_by_field_name("name"),
         "macro_definition" => node.child_by_field_name("name"),
         _ => None,
-    };
+    });
 
     name_node.map(|n| source[n.byte_range()].to_string())
 }
 
-fn extract_req_refs_from_comments(source: &str, node: Node) -> Vec<String> {
+/// Returns (requirement refs, earliest comment line if any)
+fn extract_req_refs_from_comments(source: &str, node: Node) -> (Vec<String>, Option<usize>) {
     let mut refs = Vec::new();
+    let mut earliest_comment_line: Option<usize> = None;
 
     // Look for comments that precede this node
     // Collect all siblings before this node, then walk backwards to find consecutive comments
@@ -251,12 +449,26 @@ fn extract_req_refs_from_comments(source: &str, node: Node) -> Vec<String> {
         // Walk backwards through preceding siblings, collecting comments
         // Stop when we hit something that's not a comment or attribute
         for sibling in preceding_siblings.into_iter().rev() {
+            // r[impl code-unit.boundary.include-comments]
+            // Different languages use different node kinds for comments:
+            // - Rust: line_comment, block_comment, attribute_item
+            // - Swift/Go/TypeScript: comment
+            // - Python: comment
             let is_comment_like = matches!(
                 sibling.kind(),
-                "line_comment" | "block_comment" | "attribute_item"
+                "line_comment"
+                    | "block_comment"
+                    | "comment"
+                    | "attribute_item"
+                    | "decorator"       // Python decorators
+                    | "multiline_comment"
             );
             if is_comment_like {
                 collect_comment_refs(source, sibling, &mut refs);
+                // Track the earliest comment line (1-indexed)
+                let sibling_line = sibling.start_position().row + 1;
+                earliest_comment_line =
+                    Some(earliest_comment_line.map_or(sibling_line, |l| l.min(sibling_line)));
             } else {
                 // Stop at first non-comment node
                 break;
@@ -267,7 +479,7 @@ fn extract_req_refs_from_comments(source: &str, node: Node) -> Vec<String> {
     // Check for doc comments and inner comments that are children of this node
     collect_inner_comment_refs(source, node, &mut refs);
 
-    refs
+    (refs, earliest_comment_line)
 }
 
 /// Recursively collect comment refs from a node's children
@@ -275,7 +487,7 @@ fn collect_inner_comment_refs(source: &str, node: Node, refs: &mut Vec<String>) 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         match child.kind() {
-            "line_comment" | "block_comment" => {
+            "line_comment" | "block_comment" | "comment" | "multiline_comment" => {
                 extract_refs_from_comment_text(source, child, refs);
             }
             // Doc comments are in attributes -> line_outer_doc_comment -> doc_comment
@@ -302,11 +514,11 @@ fn collect_inner_comment_refs(source: &str, node: Node, refs: &mut Vec<String>) 
 
 fn collect_comment_refs(source: &str, node: Node, refs: &mut Vec<String>) {
     match node.kind() {
-        "line_comment" | "block_comment" => {
+        "line_comment" | "block_comment" | "comment" | "multiline_comment" => {
             extract_refs_from_comment_text(source, node, refs);
         }
-        "attribute_item" => {
-            // Could be a doc attribute, check children
+        "attribute_item" | "decorator" => {
+            // Could be a doc attribute or decorator, check children
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 collect_comment_refs(source, child, refs);
@@ -573,5 +785,387 @@ type AType = i32;
         assert!(kinds.contains(&CodeUnitKind::Const));
         assert!(kinds.contains(&CodeUnitKind::Static));
         assert!(kinds.contains(&CodeUnitKind::TypeAlias));
+    }
+
+    #[test]
+    fn test_consecutive_functions_have_separate_boundaries() {
+        // This mirrors the pattern from reqs.rs where multiple test functions
+        // each have their own verify comment.
+        // The start_line should include preceding comments/attributes.
+        let source = r#"// r[verify first.test]
+#[tokio::test]
+async fn test_first() {
+    let x = 1;
+    assert!(x == 1);
+}
+
+// r[verify second.test]
+#[tokio::test]
+async fn test_second() {
+    let y = 2;
+    assert!(y == 2);
+}
+
+#[tokio::test]
+async fn test_third() {
+    let z = 3;
+    assert!(z == 3);
+}
+"#;
+        let units = extract_rust(Path::new("test.rs"), source);
+        assert_eq!(units.len(), 3, "Should find 3 functions");
+
+        // First function: starts at line 1 (comment), ends at line 6
+        let first = &units.units[0];
+        assert_eq!(first.name.as_deref(), Some("test_first"));
+        assert_eq!(
+            first.start_line, 1,
+            "test_first should start at line 1 (comment)"
+        );
+        assert_eq!(first.end_line, 6, "test_first should end at line 6");
+        assert_eq!(first.req_refs, vec!["first.test"]);
+
+        // Second function: starts at line 8 (comment), ends at line 13
+        let second = &units.units[1];
+        assert_eq!(second.name.as_deref(), Some("test_second"));
+        assert_eq!(
+            second.start_line, 8,
+            "test_second should start at line 8 (comment)"
+        );
+        assert_eq!(second.end_line, 13, "test_second should end at line 13");
+        assert_eq!(second.req_refs, vec!["second.test"]);
+
+        // Third function: starts at line 15 (attribute, no comment), ends at line 19
+        let third = &units.units[2];
+        assert_eq!(third.name.as_deref(), Some("test_third"));
+        assert_eq!(
+            third.start_line, 15,
+            "test_third should start at line 15 (attribute)"
+        );
+        assert_eq!(third.end_line, 19, "test_third should end at line 19");
+        assert!(third.req_refs.is_empty(), "test_third has no refs");
+    }
+
+    #[test]
+    fn test_multiline_function_boundaries() {
+        let source = r#"fn short() {}
+
+fn longer() {
+    let a = 1;
+    let b = 2;
+    let c = 3;
+    println!("{}", a + b + c);
+}
+
+fn another_short() {}
+"#;
+        let units = extract_rust(Path::new("test.rs"), source);
+        assert_eq!(units.len(), 3);
+
+        assert_eq!(units.units[0].name.as_deref(), Some("short"));
+        assert_eq!(units.units[0].start_line, 1);
+        assert_eq!(units.units[0].end_line, 1);
+
+        assert_eq!(units.units[1].name.as_deref(), Some("longer"));
+        assert_eq!(units.units[1].start_line, 3);
+        assert_eq!(units.units[1].end_line, 8);
+
+        assert_eq!(units.units[2].name.as_deref(), Some("another_short"));
+        assert_eq!(units.units[2].start_line, 10);
+        assert_eq!(units.units[2].end_line, 10);
+    }
+
+    // r[verify code-unit.definition]
+    // r[verify code-unit.boundary.include-comments]
+    #[test]
+    fn test_swift_code_units() {
+        let source = r#"// r[impl swift.feature]
+func doSomething() {
+    print("hello")
+}
+
+// r[verify swift.test]
+class MyClass {
+    func method() {}
+}
+
+struct MyStruct {
+    var x: Int
+}
+
+enum MyEnum {
+    case a
+    case b
+}
+
+protocol MyProtocol {
+    func required()
+}
+"#;
+        let units = extract_swift(Path::new("test.swift"), source);
+
+        // Function
+        let func_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("doSomething"));
+        assert!(func_unit.is_some(), "Should find doSomething function");
+        let func_unit = func_unit.unwrap();
+        assert_eq!(func_unit.kind, CodeUnitKind::Function);
+        assert_eq!(func_unit.start_line, 1, "Should include comment");
+        assert_eq!(func_unit.req_refs, vec!["swift.feature"]);
+
+        // Class
+        let class_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyClass"));
+        assert!(class_unit.is_some(), "Should find MyClass");
+        assert_eq!(class_unit.unwrap().start_line, 6, "Should include comment");
+
+        // Struct
+        let struct_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyStruct"));
+        assert!(struct_unit.is_some(), "Should find MyStruct");
+
+        // Enum
+        let enum_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyEnum"));
+        assert!(enum_unit.is_some(), "Should find MyEnum");
+
+        // Protocol
+        let proto_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyProtocol"));
+        assert!(proto_unit.is_some(), "Should find MyProtocol");
+    }
+
+    // r[verify code-unit.definition]
+    // r[verify code-unit.boundary.include-comments]
+    #[test]
+    fn test_go_code_units() {
+        let source = r#"package main
+
+// r[impl go.feature]
+func doSomething() {
+    fmt.Println("hello")
+}
+
+// r[verify go.test]
+func (s *Server) Handle() {
+    // method
+}
+
+type MyStruct struct {
+    x int
+}
+"#;
+        let units = extract_go(Path::new("test.go"), source);
+
+        // Function
+        let func_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("doSomething"));
+        assert!(func_unit.is_some(), "Should find doSomething function");
+        let func_unit = func_unit.unwrap();
+        assert_eq!(func_unit.kind, CodeUnitKind::Function);
+        assert_eq!(func_unit.start_line, 3, "Should include comment");
+        assert_eq!(func_unit.req_refs, vec!["go.feature"]);
+
+        // Method
+        let method_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("Handle"));
+        assert!(method_unit.is_some(), "Should find Handle method");
+        assert_eq!(method_unit.unwrap().start_line, 8, "Should include comment");
+
+        // Type declaration (struct) - Go's type_declaration wraps type_spec
+        // The name might not be directly accessible in the same way as other languages
+        let type_units: Vec<_> = units
+            .units
+            .iter()
+            .filter(|u| u.kind == CodeUnitKind::Struct)
+            .collect();
+        assert!(
+            !type_units.is_empty(),
+            "Should find at least one type declaration"
+        );
+    }
+
+    // r[verify code-unit.definition]
+    // r[verify code-unit.boundary.include-comments]
+    #[test]
+    fn test_java_code_units() {
+        let source = r#"// r[impl java.feature]
+public class MyClass {
+    // r[impl java.method]
+    public void doSomething() {
+        System.out.println("hello");
+    }
+
+    public MyClass() {
+        // constructor
+    }
+}
+
+interface MyInterface {
+    void required();
+}
+
+enum MyEnum {
+    A, B, C
+}
+"#;
+        let units = extract_java(Path::new("Test.java"), source);
+
+        // Class
+        let class_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyClass"));
+        assert!(class_unit.is_some(), "Should find MyClass");
+        let class_unit = class_unit.unwrap();
+        assert_eq!(class_unit.kind, CodeUnitKind::Struct);
+        assert_eq!(class_unit.start_line, 1, "Should include comment");
+        assert_eq!(class_unit.req_refs, vec!["java.feature"]);
+
+        // Method
+        let method_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("doSomething"));
+        assert!(method_unit.is_some(), "Should find doSomething method");
+        assert_eq!(method_unit.unwrap().start_line, 3, "Should include comment");
+
+        // Interface
+        let iface_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyInterface"));
+        assert!(iface_unit.is_some(), "Should find MyInterface");
+
+        // Enum
+        let enum_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyEnum"));
+        assert!(enum_unit.is_some(), "Should find MyEnum");
+    }
+
+    // r[verify code-unit.definition]
+    // r[verify code-unit.boundary.include-comments]
+    #[test]
+    fn test_python_code_units() {
+        let source = r#"# r[impl python.feature]
+def do_something():
+    print("hello")
+
+# r[verify python.test]
+class MyClass:
+    def method(self):
+        pass
+"#;
+        let units = extract_python(Path::new("test.py"), source);
+
+        // Function
+        let func_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("do_something"));
+        assert!(func_unit.is_some(), "Should find do_something function");
+        let func_unit = func_unit.unwrap();
+        assert_eq!(func_unit.kind, CodeUnitKind::Function);
+        assert_eq!(func_unit.start_line, 1, "Should include comment");
+        assert_eq!(func_unit.req_refs, vec!["python.feature"]);
+
+        // Class
+        let class_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyClass"));
+        assert!(class_unit.is_some(), "Should find MyClass");
+        assert_eq!(class_unit.unwrap().start_line, 5, "Should include comment");
+
+        // Method inside class
+        let method_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("method"));
+        assert!(method_unit.is_some(), "Should find method inside class");
+    }
+
+    // r[verify code-unit.definition]
+    // r[verify code-unit.boundary.include-comments]
+    #[test]
+    fn test_typescript_code_units() {
+        let source = r#"// r[impl ts.feature]
+function doSomething(): void {
+    console.log("hello");
+}
+
+// r[verify ts.test]
+class MyClass {
+    method(): void {}
+}
+
+interface MyInterface {
+    required(): void;
+}
+
+type MyType = string | number;
+
+enum MyEnum {
+    A,
+    B,
+}
+"#;
+        let units = extract_typescript(Path::new("test.ts"), source);
+
+        // Function
+        let func_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("doSomething"));
+        assert!(func_unit.is_some(), "Should find doSomething function");
+        let func_unit = func_unit.unwrap();
+        assert_eq!(func_unit.kind, CodeUnitKind::Function);
+        assert_eq!(func_unit.start_line, 1, "Should include comment");
+        assert_eq!(func_unit.req_refs, vec!["ts.feature"]);
+
+        // Class
+        let class_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyClass"));
+        assert!(class_unit.is_some(), "Should find MyClass");
+        assert_eq!(class_unit.unwrap().start_line, 6, "Should include comment");
+
+        // Interface
+        let iface_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyInterface"));
+        assert!(iface_unit.is_some(), "Should find MyInterface");
+
+        // Type alias
+        let type_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyType"));
+        assert!(type_unit.is_some(), "Should find MyType");
+
+        // Enum
+        let enum_unit = units
+            .units
+            .iter()
+            .find(|u| u.name.as_deref() == Some("MyEnum"));
+        assert!(enum_unit.is_some(), "Should find MyEnum");
     }
 }
