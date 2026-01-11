@@ -20,8 +20,8 @@ use tracey_core::{RefVerb, ReqDefinition, Reqs};
 
 // Markdown rendering
 use marq::{
-    AasvgHandler, ArboriumHandler, InlineCodeHandler, PikruHandler, RenderOptions, ReqHandler,
-    parse_frontmatter, render,
+    AasvgHandler, ArboriumHandler, CompareHandler, InlineCodeHandler, PikruHandler, RenderOptions,
+    ReqHandler, parse_frontmatter, render,
 };
 
 use crate::config::Config;
@@ -954,9 +954,10 @@ async fn load_spec_content(
     let inline_code_handler =
         TraceyInlineCodeHandler::new(spec_name.to_string(), impl_name.to_string());
     let opts = RenderOptions::new()
-        .with_default_handler(ArboriumHandler::new())
+        .with_default_handler(ArboriumHandler::new().with_language_header(true))
         .with_handler(&["aasvg"], AasvgHandler::new())
         .with_handler(&["pikchr"], PikruHandler::new())
+        .with_handler(&["compare"], CompareHandler::new())
         .with_req_handler(rule_handler)
         .with_inline_code_handler(inline_code_handler);
 

@@ -3199,4 +3199,66 @@
             margin-right: auto;
         }
     }
+    /* ==========================================================================
+   Code Block with Language Header
+   ========================================================================== */
+
+    .code-block {
+        margin: var(--space-4) 0;
+
+        & pre {
+            margin: 0;
+            border-radius: 0 0 6px 6px;
+        }
+    }
+
+    .code-header {
+        font-size: var(--text-xs);
+        font-weight: var(--weight-semibold);
+        color: var(--fg-muted);
+        text-transform: uppercase;
+        letter-spacing: var(--tracking-wide);
+        padding: var(--space-1-5) var(--space-3);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+    }
+
+    /* ==========================================================================
+   Compare Container (side-by-side code comparison)
+   ========================================================================== */
+
+    .compare-container {
+        display: flex;
+        gap: var(--space-4);
+        margin: var(--space-4) 0;
+    }
+
+    .compare-section {
+        flex: 1;
+        min-width: 0;
+
+        & pre {
+            margin: 0;
+        }
+    }
+
+    .compare-header {
+        font-size: var(--text-xs);
+        font-weight: var(--weight-semibold);
+        color: var(--fg-muted);
+        text-transform: uppercase;
+        letter-spacing: var(--tracking-wide);
+        padding: var(--space-1-5) var(--space-3);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+    }
+
+    .compare-section pre {
+        border-radius: 0 0 6px 6px;
+    }
+
 } /* end @layer components */
