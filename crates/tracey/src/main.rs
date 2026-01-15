@@ -101,7 +101,13 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    let args: Args = args::from_std_args().expect("failed to parse arguments");
+    let args: Args = match args::from_std_args() {
+        Ok(args) => args,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1)
+        }
+    };
 
     if args.version {
         println!("tracey {}", env!("CARGO_PKG_VERSION"));
