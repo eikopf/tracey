@@ -67,9 +67,15 @@ fn generate_typescript_types() {
         typescript
     );
 
-    // Write to dashboard/src/api-types.ts
+    // Only write if content changed to avoid retriggering the build
     let output_path = Path::new("src/bridge/http/dashboard/src/api-types.ts");
-    fs::write(output_path, output).expect("Failed to write TypeScript types");
+    let should_write = match fs::read_to_string(output_path) {
+        Ok(existing) => existing != output,
+        Err(_) => true,
+    };
+    if should_write {
+        fs::write(output_path, &output).expect("Failed to write TypeScript types");
+    }
 }
 
 fn build_dashboard() {
