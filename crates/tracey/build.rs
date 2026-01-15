@@ -80,6 +80,44 @@ fn build_dashboard() {
         return;
     }
 
+    // Check if pnpm is available
+    let pnpm_check = Command::new("pnpm").arg("--version").output();
+
+    match pnpm_check {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            eprintln!("Found pnpm {}", version.trim());
+        }
+        _ => {
+            panic!(
+                "\n\
+                pnpm is required but not found!\n\
+                \n\
+                Install pnpm using one of the following methods:\n\
+                \n\
+                  # Using npm (Node.js must be installed):\n\
+                  npm install -g pnpm\n\
+                \n\
+                  # Using Corepack (Node.js 16.13+ includes Corepack):\n\
+                  corepack enable pnpm\n\
+                \n\
+                  # On macOS with Homebrew:\n\
+                  brew install pnpm\n\
+                \n\
+                  # On Windows with Scoop:\n\
+                  scoop install pnpm\n\
+                \n\
+                  # Standalone script (POSIX):\n\
+                  curl -fsSL https://get.pnpm.io/install.sh | sh -\n\
+                \n\
+                  # Standalone script (Windows PowerShell):\n\
+                  iwr https://get.pnpm.io/install.ps1 -useb | iex\n\
+                \n\
+                See https://pnpm.io/installation for more options.\n"
+            );
+        }
+    }
+
     eprintln!("Building dashboard with pnpm...");
 
     // Install dependencies if needed
