@@ -4,12 +4,11 @@
 
 use roam_stream::{Connector, HandshakeConfig, NoDispatcher, connect};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
-use tokio::net::UnixStream;
 use tracing::info;
 
-use super::socket_path;
+use super::local_endpoint;
 
 // Re-export the generated client from tracey-proto
 pub use tracey_proto::TraceyDaemonClient;
@@ -71,19 +70,27 @@ impl DaemonConnector {
             cmd.process_group(0);
         }
 
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
+            cmd.creation_flags(0x00000200 | 0x00000008);
+        }
+
         cmd.spawn()
             .map_err(|e| io::Error::other(format!("Failed to spawn daemon: {e}")))?;
 
         Ok(())
     }
 
-    /// Wait for the daemon socket to appear and connect.
-    async fn wait_and_connect(&self, sock: &Path) -> io::Result<UnixStream> {
+    /// Wait for the daemon endpoint to appear and connect.
+    async fn wait_and_connect(&self) -> io::Result<roam_local::LocalStream> {
+        let endpoint = local_endpoint(&self.project_root);
         let start = std::time::Instant::now();
         let timeout = Duration::from_secs(10);
 
         loop {
-            if let Ok(stream) = UnixStream::connect(sock).await {
+            if let Ok(stream) = roam_local::connect(&endpoint).await {
                 info!("Connected to daemon");
                 return Ok(stream);
             }
@@ -105,28 +112,28 @@ impl DaemonConnector {
 }
 
 impl Connector for DaemonConnector {
-    type Transport = UnixStream;
+    type Transport = roam_local::LocalStream;
 
     async fn connect(&self) -> io::Result<Self::Transport> {
-        let sock = socket_path(&self.project_root);
+        let endpoint = local_endpoint(&self.project_root);
 
         // Try to connect to existing daemon
-        match UnixStream::connect(&sock).await {
+        match roam_local::connect(&endpoint).await {
             Ok(stream) => {
                 info!("Connected to daemon");
                 Ok(stream)
             }
             Err(_) => {
                 // r[impl daemon.lifecycle.stale-socket]
-                if sock.exists() {
-                    let _ = std::fs::remove_file(&sock);
+                if roam_local::endpoint_exists(&endpoint) {
+                    let _ = roam_local::remove_endpoint(&endpoint);
                 }
 
                 // Auto-start the daemon
                 self.spawn_daemon()?;
 
                 // Wait for daemon to be ready
-                self.wait_and_connect(&sock).await
+                self.wait_and_connect().await
             }
         }
     }

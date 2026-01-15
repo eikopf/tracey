@@ -92,6 +92,7 @@ open = "5"
 # roam RPC framework (for daemon architecture)
 roam = { git = "https://github.com/bearcove/roam", branch = "main" }
 roam-stream = { git = "https://github.com/bearcove/roam", branch = "main" }
+roam-local = { git = "https://github.com/bearcove/roam", branch = "main" }
 
 [features]
 default = ["search"]
