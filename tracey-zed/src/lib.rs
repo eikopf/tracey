@@ -81,6 +81,12 @@ impl TraceyExtension {
             return Ok(path.clone());
         }
 
+        // Check if binary exists in PATH first (for local development)
+        if let Some(path) = zed::which(binary_name()) {
+            self.cached_binary_path = Some(path.clone());
+            return Ok(path);
+        }
+
         // Check if binary already exists in extension directory
         let binary_path = format!("./{}", binary_name());
         if fs::metadata(&binary_path).is_ok() {
