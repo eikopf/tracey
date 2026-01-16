@@ -26,10 +26,29 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use eyre::{Result, WrapErr};
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use tracing::{debug, info, warn};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use tracing::{debug, info, trace, warn};
 
 use crate::config::Config;
+
+// ============================================================================
+// Event Filtering
+// ============================================================================
+
+/// Check if a notify event represents an actual file change.
+///
+/// On Linux, the notify crate emits `Access` events when files are opened/closed,
+/// which can cause infinite loops when tracey reads its own config file. We filter
+/// these out and only process events that represent actual mutations:
+/// - `Create`: File or directory was created
+/// - `Modify`: File content, metadata, or name changed
+/// - `Remove`: File or directory was deleted
+fn is_mutation_event(event: &Event) -> bool {
+    matches!(
+        event.kind,
+        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+    )
+}
 
 // ============================================================================
 // Watcher Events
@@ -290,8 +309,17 @@ where
     }
 
     /// Add an event to the current batch.
+    ///
+    /// Events that don't represent actual file mutations (like `Access` events
+    /// on Linux) are filtered out to prevent infinite rebuild loops.
     fn push(&mut self, event: Event) {
-        debug!(?event, "raw notify event");
+        // Filter out non-mutation events (e.g., Access events on Linux)
+        if !is_mutation_event(&event) {
+            trace!(?event, "ignoring non-mutation event");
+            return;
+        }
+
+        debug!(?event, "notify event");
 
         if self.batch_start.is_none() {
             self.batch_start = Some(Instant::now());
@@ -615,5 +643,95 @@ mod tests {
         assert_eq!(dirs.len(), 2);
         assert!(dirs.contains(&PathBuf::from("/foo")));
         assert!(dirs.contains(&PathBuf::from("/bar")));
+    }
+
+    // Tests for is_mutation_event - filtering out Access events (fixes #42)
+
+    fn make_event(kind: EventKind) -> Event {
+        Event {
+            kind,
+            paths: vec![PathBuf::from("/test/file.rs")],
+            attrs: Default::default(),
+        }
+    }
+
+    #[test]
+    fn test_is_mutation_event_create() {
+        use notify::event::CreateKind;
+
+        assert!(is_mutation_event(&make_event(EventKind::Create(
+            CreateKind::File
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Create(
+            CreateKind::Folder
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Create(
+            CreateKind::Any
+        ))));
+    }
+
+    #[test]
+    fn test_is_mutation_event_modify() {
+        use notify::event::{DataChange, MetadataKind, ModifyKind, RenameMode};
+
+        assert!(is_mutation_event(&make_event(EventKind::Modify(
+            ModifyKind::Data(DataChange::Content)
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Modify(
+            ModifyKind::Data(DataChange::Size)
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Modify(
+            ModifyKind::Metadata(MetadataKind::WriteTime)
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Modify(
+            ModifyKind::Name(RenameMode::Both)
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Modify(
+            ModifyKind::Any
+        ))));
+    }
+
+    #[test]
+    fn test_is_mutation_event_remove() {
+        use notify::event::RemoveKind;
+
+        assert!(is_mutation_event(&make_event(EventKind::Remove(
+            RemoveKind::File
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Remove(
+            RemoveKind::Folder
+        ))));
+        assert!(is_mutation_event(&make_event(EventKind::Remove(
+            RemoveKind::Any
+        ))));
+    }
+
+    #[test]
+    fn test_is_mutation_event_rejects_access() {
+        use notify::event::{AccessKind, AccessMode};
+
+        // These are the events that cause infinite loops on Linux
+        assert!(!is_mutation_event(&make_event(EventKind::Access(
+            AccessKind::Open(AccessMode::Any)
+        ))));
+        assert!(!is_mutation_event(&make_event(EventKind::Access(
+            AccessKind::Open(AccessMode::Read)
+        ))));
+        assert!(!is_mutation_event(&make_event(EventKind::Access(
+            AccessKind::Close(AccessMode::Any)
+        ))));
+        assert!(!is_mutation_event(&make_event(EventKind::Access(
+            AccessKind::Read
+        ))));
+        assert!(!is_mutation_event(&make_event(EventKind::Access(
+            AccessKind::Any
+        ))));
+    }
+
+    #[test]
+    fn test_is_mutation_event_rejects_other() {
+        // Any and Other events should also be rejected
+        assert!(!is_mutation_event(&make_event(EventKind::Any)));
+        assert!(!is_mutation_event(&make_event(EventKind::Other)));
     }
 }
