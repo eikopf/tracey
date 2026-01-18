@@ -2284,6 +2284,9 @@ name = "lz4_flex"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08ab2867e3eeeca90e844d1940eab391c9dc5228783db2ed999acbc0a9ed375a"
+dependencies = [
+ "twox-hash",
+]
 
 [[package]]
 name = "marq"
@@ -3339,6 +3342,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "styx-embed"
+version = "0.1.0"
+source = "git+https://github.com/bearcove/styx?branch=main#cc4277a2d5fef04928b13eec1433a12f45bb8c37"
+dependencies = [
+ "blake3",
+ "lz4_flex",
+ "styx-embed-macros",
+]
+
+[[package]]
+name = "styx-embed-macros"
+version = "0.1.0"
+source = "git+https://github.com/bearcove/styx?branch=main#cc4277a2d5fef04928b13eec1433a12f45bb8c37"
+dependencies = [
+ "blake3",
+ "lz4_flex",
+ "proc-macro2",
+ "unsynn",
+]
+
+[[package]]
 name = "styx-format"
 version = "0.1.0"
 source = "git+https://github.com/bearcove/styx?branch=main#cc4277a2d5fef04928b13eec1433a12f45bb8c37"
@@ -3877,6 +3901,7 @@ dependencies = [
  "rust-mcp-sdk",
  "serde",
  "serde_json",
+ "styx-embed",
  "tantivy",
  "tempfile",
  "tokio",
@@ -4017,6 +4042,12 @@ dependencies = [
  "thiserror 2.0.17",
  "utf-8",
 ]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typenum"
