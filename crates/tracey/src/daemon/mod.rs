@@ -403,7 +403,7 @@ pub async fn run(project_root: PathBuf, config_path: PathBuf) -> Result<()> {
 
                     // Accept connection with roam-stream (handles framing and hello exchange)
                     match accept(stream, config, dispatcher).await {
-                        Ok((_handle, driver)) => {
+                        Ok((_handle, _incoming, driver)) => {
                             info!("Connection established");
                             // Run the driver (handles all RPC dispatch)
                             if let Err(e) = driver.run().await {

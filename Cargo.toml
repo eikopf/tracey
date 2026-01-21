@@ -32,15 +32,11 @@ facet-error = { git = "https://github.com/facet-rs/facet", branch = "main" }
 # Error handling
 eyre = "0.6"
 
-
-
 # File walking (gitignore-aware)
 ignore = "0.4"
 
 # Parallel processing
 rayon = "1"
-
-
 
 # Pretty output
 owo-colors = "4"
