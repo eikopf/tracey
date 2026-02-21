@@ -54,9 +54,17 @@ pub async fn run(root: Option<PathBuf>, _config_path: PathBuf) -> Result<()> {
 }
 
 /// Internal: run the LSP server.
-async fn run_lsp_server(project_root: PathBuf) -> Result<()> {
-    let stdin = tokio::io::stdin();
+///
+/// Peeks at the incoming `initialize` request to extract `rootUri` before
+/// constructing the backend, so the daemon client connects to the correct
+/// workspace even when the process CWD differs from the project root.
+async fn run_lsp_server(fallback_root: PathBuf) -> Result<()> {
+    use tokio::io::{AsyncReadExt, BufReader};
+
+    let mut stdin = BufReader::new(tokio::io::stdin());
     let stdout = tokio::io::stdout();
+
+    let (init_msg, project_root) = peek_initialize_root(&mut stdin, fallback_root).await?;
 
     let daemon_client = new_client(project_root.clone());
 
@@ -69,9 +77,65 @@ async fn run_lsp_server(project_root: PathBuf) -> Result<()> {
             files_with_diagnostics: HashSet::new(),
         }),
     });
+
+    // Replay the buffered initialize message, then continue reading from stdin.
+    let stdin = (&init_msg[..]).chain(stdin);
     Server::new(stdin, stdout, socket).serve(service).await;
 
     Ok(())
+}
+
+/// Read the first LSP message (the `initialize` request) to extract `rootUri`.
+///
+/// Returns the raw message bytes (for replay into tower_lsp) and the project
+/// root derived from `rootUri`, falling back to `fallback` when the field is
+/// absent or cannot be converted to a file path.
+async fn peek_initialize_root(
+    stdin: &mut tokio::io::BufReader<tokio::io::Stdin>,
+    fallback: PathBuf,
+) -> Result<(Vec<u8>, PathBuf)> {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+
+    let mut raw = Vec::new();
+    let mut content_length: Option<usize> = None;
+
+    // Parse LSP headers (terminated by an empty line).
+    loop {
+        let mut line = String::new();
+        stdin.read_line(&mut line).await?;
+        raw.extend_from_slice(line.as_bytes());
+        if line.trim().is_empty() {
+            break;
+        }
+        if let Some(val) = line.strip_prefix("Content-Length:") {
+            content_length = val.trim().parse().ok();
+        }
+    }
+
+    let content_length = content_length
+        .ok_or_else(|| eyre::eyre!("first LSP message missing Content-Length header"))?;
+
+    // Read the JSON body.
+    let body_start = raw.len();
+    raw.resize(body_start + content_length, 0);
+    stdin.read_exact(&mut raw[body_start..]).await?;
+
+    // Extract params.rootUri from the initialize request.
+    let project_root = serde_json::from_slice::<serde_json::Value>(&raw[body_start..])
+        .ok()
+        .and_then(|v| v.get("params")?.get("rootUri")?.as_str().map(String::from))
+        .and_then(|uri| Url::parse(&uri).ok())
+        .and_then(|url| url.to_file_path().ok())
+        .unwrap_or_else(|| fallback.clone());
+
+    if project_root != fallback {
+        tracing::info!(
+            "Using project root from LSP rootUri: {}",
+            project_root.display()
+        );
+    }
+
+    Ok((raw, project_root))
 }
 
 struct Backend {
