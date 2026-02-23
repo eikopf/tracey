@@ -318,10 +318,10 @@ pub async fn run(project_root: PathBuf, config_path: PathBuf) -> Result<()> {
                             // r[impl server.watch.respect-excludes]
                             // Reject paths that match exclude patterns
                             for pattern in &exclude_patterns {
-                                if let Ok(glob) = globset::Glob::new(pattern.as_str()) {
-                                    if glob.compile_matcher().is_match(p) {
-                                        return false;
-                                    }
+                                if let Ok(glob) = globset::Glob::new(pattern.as_str())
+                                    && glob.compile_matcher().is_match(p)
+                                {
+                                    return false;
                                 }
                             }
 
@@ -332,10 +332,10 @@ pub async fn run(project_root: PathBuf, config_path: PathBuf) -> Result<()> {
                                 return true;
                             }
                             for pattern in &include_patterns {
-                                if let Ok(glob) = globset::Glob::new(pattern.as_str()) {
-                                    if glob.compile_matcher().is_match(p) {
-                                        return true;
-                                    }
+                                if let Ok(glob) = globset::Glob::new(pattern.as_str())
+                                    && glob.compile_matcher().is_match(p)
+                                {
+                                    return true;
                                 }
                             }
                             false

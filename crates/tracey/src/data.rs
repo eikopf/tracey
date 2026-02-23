@@ -2039,11 +2039,11 @@ pub async fn build_dashboard_data_with_overlay_and_cache(
                         let path = entry.path();
                         if let Ok(relative) = path.strip_prefix(project_root) {
                             for pattern in &test_patterns {
-                                if let Ok(glob) = globset::Glob::new(pattern) {
-                                    if glob.compile_matcher().is_match(relative) {
-                                        test_files.insert(path.to_path_buf());
-                                        break;
-                                    }
+                                if let Ok(glob) = globset::Glob::new(pattern)
+                                    && glob.compile_matcher().is_match(relative)
+                                {
+                                    test_files.insert(path.to_path_buf());
+                                    break;
                                 }
                             }
                         }

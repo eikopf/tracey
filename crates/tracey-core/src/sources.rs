@@ -335,10 +335,10 @@ fn is_included(path: &Path, root: &Path, patterns: &[String]) -> bool {
     let relative = path.strip_prefix(root).unwrap_or(path);
 
     for pattern in patterns {
-        if let Ok(glob) = globset::Glob::new(pattern) {
-            if glob.compile_matcher().is_match(relative) {
-                return true;
-            }
+        if let Ok(glob) = globset::Glob::new(pattern)
+            && glob.compile_matcher().is_match(relative)
+        {
+            return true;
         }
     }
 
@@ -350,10 +350,10 @@ fn is_excluded(path: &Path, root: &Path, patterns: &[String]) -> bool {
     let relative = path.strip_prefix(root).unwrap_or(path);
 
     for pattern in patterns {
-        if let Ok(glob) = globset::Glob::new(pattern) {
-            if glob.compile_matcher().is_match(relative) {
-                return true;
-            }
+        if let Ok(glob) = globset::Glob::new(pattern)
+            && glob.compile_matcher().is_match(relative)
+        {
+            return true;
         }
     }
 
