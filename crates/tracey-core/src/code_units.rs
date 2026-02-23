@@ -1383,12 +1383,85 @@ pub struct FullReqRef {
     pub byte_length: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct LineNumber(usize);
+
+#[derive(Debug, Clone, Copy)]
+struct ByteOffset(usize);
+
+#[derive(Debug, Clone, Copy)]
+struct ByteLength(usize);
+
+#[derive(Debug, Clone, Copy)]
+struct RefLocation {
+    line: LineNumber,
+    byte_offset: ByteOffset,
+    byte_length: ByteLength,
+}
+
+impl RefLocation {
+    fn from_indices(
+        line: LineNumber,
+        base_offset: ByteOffset,
+        prefix_start: usize,
+        end_idx_inclusive: usize,
+    ) -> Self {
+        Self {
+            line,
+            byte_offset: ByteOffset(base_offset.0 + prefix_start),
+            byte_length: ByteLength(end_idx_inclusive - prefix_start + 1),
+        }
+    }
+
+    fn into_full_ref(self, prefix: String, verb: String, req_id: RuleId) -> FullReqRef {
+        FullReqRef {
+            prefix,
+            verb,
+            req_id,
+            line: self.line.0,
+            byte_offset: self.byte_offset.0,
+            byte_length: self.byte_length.0,
+        }
+    }
+
+    fn into_warning(self) -> FullReqRefWarning {
+        FullReqRefWarning {
+            line: self.line.0,
+            byte_offset: self.byte_offset.0,
+            byte_length: self.byte_length.0,
+        }
+    }
+}
+
+/// Warning emitted while parsing references from comments.
+#[derive(Debug, Clone)]
+pub struct FullReqRefWarning {
+    /// Line number (1-indexed)
+    pub line: usize,
+    /// Byte offset of the malformed reference start
+    pub byte_offset: usize,
+    /// Byte length of the malformed reference
+    pub byte_length: usize,
+}
+
+/// Extracted references plus parser warnings.
+#[derive(Debug, Clone, Default)]
+pub struct ExtractedRefs {
+    pub references: Vec<FullReqRef>,
+    pub warnings: Vec<FullReqRefWarning>,
+}
+
 /// Extract ALL requirement references from a file using tree-sitter
 ///
 /// r[impl ref.parser.tree-sitter]
 /// r[impl ref.parser.languages]
 /// r[impl ref.parser.unified]
 pub fn extract_refs(path: &Path, source: &str) -> Vec<FullReqRef> {
+    extract_refs_with_warnings(path, source).references
+}
+
+/// Extract all requirement references and malformed-reference warnings.
+pub fn extract_refs_with_warnings(path: &Path, source: &str) -> ExtractedRefs {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     let language = match ext {
@@ -1420,7 +1493,7 @@ pub fn extract_refs(path: &Path, source: &str) -> Vec<FullReqRef> {
         "cmake" => arborium_cmake::language(),
         "ml" | "mli" => arborium_ocaml::language(),
         "sh" | "bash" | "zsh" => arborium_bash::language(),
-        _ => return Vec::new(),
+        _ => return ExtractedRefs::default(),
     };
 
     let mut parser = Parser::new();
@@ -1429,13 +1502,23 @@ pub fn extract_refs(path: &Path, source: &str) -> Vec<FullReqRef> {
         .expect("Failed to load grammar");
 
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return ExtractedRefs::default();
     };
 
     let mut refs = Vec::new();
+    let mut warnings = Vec::new();
     let mut ignore_state = IgnoreState::default();
-    extract_refs_recursive(source, tree.root_node(), &mut refs, &mut ignore_state);
-    refs
+    extract_refs_recursive(
+        source,
+        tree.root_node(),
+        &mut refs,
+        &mut warnings,
+        &mut ignore_state,
+    );
+    ExtractedRefs {
+        references: refs,
+        warnings,
+    }
 }
 
 /// State for tracking ignore directives across comment nodes.
@@ -1496,6 +1579,7 @@ fn extract_refs_recursive(
     source: &str,
     node: Node,
     refs: &mut Vec<FullReqRef>,
+    warnings: &mut Vec<FullReqRefWarning>,
     ignore_state: &mut IgnoreState,
 ) {
     // Check if this is a comment node
@@ -1526,14 +1610,14 @@ fn extract_refs_recursive(
 
         // Check ignore directives and determine if we should extract refs
         if check_ignore_directives(text, line, ignore_state) {
-            extract_full_refs_from_text(text, line, base_offset, refs);
+            extract_full_refs_from_text(text, line, base_offset, refs, warnings);
         }
     }
 
     // Recurse into children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        extract_refs_recursive(source, child, refs, ignore_state);
+        extract_refs_recursive(source, child, refs, warnings, ignore_state);
     }
 }
 
@@ -1543,7 +1627,10 @@ fn extract_full_refs_from_text(
     line: usize,
     base_offset: usize,
     refs: &mut Vec<FullReqRef>,
+    warnings: &mut Vec<FullReqRefWarning>,
 ) {
+    let line = LineNumber(line);
+    let base_offset = ByteOffset(base_offset);
     let code_mask = crate::markdown::markdown_code_mask(text);
     let mut chars = text.char_indices().peekable();
 
@@ -1576,24 +1663,42 @@ fn extract_full_refs_from_text(
             chars.next(); // consume '['
 
             // Parse: [verb req.id] or [req.id]
-            if let Some((verb, req_id, end_idx)) = try_parse_full_ref(&mut chars) {
-                refs.push(FullReqRef {
-                    prefix,
+            match try_parse_full_ref(&mut chars) {
+                Some(ParsedFullRef::Parsed {
                     verb,
                     req_id,
-                    line,
-                    byte_offset: base_offset + prefix_start,
-                    byte_length: end_idx - prefix_start + 1,
-                });
+                    end_idx,
+                }) => {
+                    let location =
+                        RefLocation::from_indices(line, base_offset, prefix_start, end_idx);
+                    refs.push(location.into_full_ref(prefix, verb, req_id));
+                }
+                Some(ParsedFullRef::Malformed { end_idx }) => {
+                    let location =
+                        RefLocation::from_indices(line, base_offset, prefix_start, end_idx);
+                    warnings.push(location.into_warning());
+                }
+                None => {}
             }
         }
     }
 }
 
+enum ParsedFullRef {
+    Parsed {
+        verb: String,
+        req_id: RuleId,
+        end_idx: usize,
+    },
+    Malformed {
+        end_idx: usize,
+    },
+}
+
 // r[impl ref.syntax.req-id]
 fn try_parse_full_ref(
     chars: &mut std::iter::Peekable<impl Iterator<Item = (usize, char)>>,
-) -> Option<(String, RuleId, usize)> {
+) -> Option<ParsedFullRef> {
     // First char must be lowercase letter
     let first_char = chars.peek().map(|(_, c)| *c)?;
     if !first_char.is_ascii_lowercase() {
@@ -1629,8 +1734,6 @@ fn try_parse_full_ref(
 
                 // Read the requirement ID
                 let mut req_id = String::new();
-                let mut has_dot = false;
-
                 // First char must be lowercase
                 if let Some(&(_, c)) = chars.peek() {
                     if c.is_ascii_lowercase() {
@@ -1651,11 +1754,8 @@ fn try_parse_full_ref(
                         || c == '-'
                         || c == '_'
                         || c == '+'
+                        || c == '.'
                     {
-                        req_id.push(c);
-                        chars.next();
-                    } else if c == '.' {
-                        has_dot = true;
                         req_id.push(c);
                         chars.next();
                     } else {
@@ -1663,9 +1763,14 @@ fn try_parse_full_ref(
                     }
                 }
 
-                if has_dot && is_valid_req_id(&req_id) {
-                    return parse_rule_id(&req_id).map(|parsed| (verb, parsed, end_idx));
+                if is_valid_req_id(&req_id) {
+                    return parse_rule_id(&req_id).map(|parsed| ParsedFullRef::Parsed {
+                        verb,
+                        req_id: parsed,
+                        end_idx,
+                    });
                 }
+                return Some(ParsedFullRef::Malformed { end_idx });
             }
             None
         }
@@ -1673,9 +1778,13 @@ fn try_parse_full_ref(
             chars.next(); // consume ]
             // [req.id] format - defaults to impl
             if is_valid_req_id(&first_word) {
-                parse_rule_id(&first_word).map(|parsed| ("impl".to_string(), parsed, end_idx))
+                parse_rule_id(&first_word).map(|parsed| ParsedFullRef::Parsed {
+                    verb: "impl".to_string(),
+                    req_id: parsed,
+                    end_idx,
+                })
             } else {
-                None
+                Some(ParsedFullRef::Malformed { end_idx })
             }
         }
         _ => None,
@@ -1717,7 +1826,6 @@ fn try_parse_req_ref(
 
                 // Read the requirement ID
                 let mut req_id = String::new();
-                let mut has_dot = false;
 
                 // First char must be lowercase
                 if let Some(&(_, c)) = chars.peek() {
@@ -1733,11 +1841,12 @@ fn try_parse_req_ref(
                     if c == ']' {
                         chars.next();
                         break;
-                    } else if c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '+' {
-                        req_id.push(c);
-                        chars.next();
-                    } else if c == '.' {
-                        has_dot = true;
+                    } else if c.is_ascii_lowercase()
+                        || c.is_ascii_digit()
+                        || c == '-'
+                        || c == '+'
+                        || c == '.'
+                    {
                         req_id.push(c);
                         chars.next();
                     } else {
@@ -1745,7 +1854,7 @@ fn try_parse_req_ref(
                     }
                 }
 
-                if has_dot && is_valid_req_id(&req_id) {
+                if is_valid_req_id(&req_id) {
                     return parse_rule_id(&req_id);
                 }
             }
@@ -1753,7 +1862,7 @@ fn try_parse_req_ref(
         }
         Some(']') => {
             chars.next(); // consume ]
-            // [req.id] format - must contain dot
+            // [req.id] format
             if is_valid_req_id(&first_word) {
                 parse_rule_id(&first_word)
             } else {
@@ -1768,7 +1877,7 @@ fn is_valid_req_id(req_id: &str) -> bool {
     let Some(parsed) = parse_rule_id(req_id) else {
         return false;
     };
-    parsed.base.contains('.') && !parsed.base.ends_with('.')
+    !parsed.base.ends_with('.')
 }
 
 #[cfg(test)]
@@ -1881,7 +1990,7 @@ fn uncovered() {}
             vec![rid("auth.login+2"), rid("auth.logout+3")]
         );
         assert!(find_req_refs("// no refs here").is_empty());
-        assert!(find_req_refs("// [invalid]").is_empty()); // no dot
+        assert!(find_req_refs("// [invalid.]").is_empty()); // trailing dot
         assert!(find_req_refs("// r[impl auth.login+]").is_empty());
     }
 
@@ -2422,6 +2531,35 @@ fn example() {}
         let refs = extract_refs(Path::new("test.rs"), source);
         assert_eq!(refs.len(), 1, "Expected 1 ref, got {:?}", refs);
         assert_eq!(refs[0].req_id, "normal.ref");
+    }
+
+    #[test]
+    fn test_extract_single_segment_refs() {
+        let source = r#"
+// r[impl link]
+// r[link]
+fn example() {}
+"#;
+        let refs = extract_refs(Path::new("test.rs"), source);
+        assert_eq!(refs.len(), 2, "Expected 2 refs, got {:?}", refs);
+        assert_eq!(refs[0].req_id, "link");
+        assert_eq!(refs[1].req_id, "link");
+    }
+
+    #[test]
+    fn test_warn_on_malformed_refs() {
+        let source = r#"
+// r[impl link.]
+// r[link.]
+fn example() {}
+"#;
+        let extracted = extract_refs_with_warnings(Path::new("test.rs"), source);
+        assert!(
+            extracted.references.is_empty(),
+            "Expected no refs, got {:?}",
+            extracted.references
+        );
+        assert_eq!(extracted.warnings.len(), 2);
     }
 
     // =========================================================================
