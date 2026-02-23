@@ -186,7 +186,9 @@ async fn run_lsp_server(cli_project_root: PathBuf) -> Result<()> {
         project_root: project_root.clone(),
         doc_state: Arc::clone(&doc_state),
     });
-    Server::new(replayed_stdin, stdout, socket).serve(service).await;
+    Server::new(replayed_stdin, stdout, socket)
+        .serve(service)
+        .await;
 
     Ok(())
 }
