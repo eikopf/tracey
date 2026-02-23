@@ -7,6 +7,7 @@ resolver = "3"
 ignored = ["facet-error"]
 
 [workspace.package]
+version = "1.0.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/bearcove/tracey"
@@ -44,15 +45,50 @@ strsim = "0.11"
 
 # Tree-sitter parsing (for reverse traceability)
 arborium = { version = "2", features = [
-    "lang-rust", "lang-c", "lang-cpp", "lang-go", "lang-zig",
-    "lang-javascript", "lang-typescript", "lang-tsx",
-    "lang-python", "lang-ruby", "lang-java", "lang-kotlin", "lang-scala",
-    "lang-bash", "lang-json", "lang-yaml", "lang-toml", "lang-xml",
-    "lang-html", "lang-css", "lang-scss", "lang-markdown", "lang-sql",
-    "lang-swift", "lang-elixir", "lang-haskell", "lang-ocaml", "lang-lua", "lang-php", "lang-r",
-    "lang-dart", "lang-asm", "lang-x86asm", "lang-matlab", "lang-perl",
-    "lang-erlang", "lang-clojure", "lang-fsharp", "lang-vb", "lang-cobol",
-    "lang-julia", "lang-d", "lang-powershell", "lang-cmake",
+  "lang-rust",
+  "lang-c",
+  "lang-cpp",
+  "lang-go",
+  "lang-zig",
+  "lang-javascript",
+  "lang-typescript",
+  "lang-tsx",
+  "lang-python",
+  "lang-ruby",
+  "lang-java",
+  "lang-kotlin",
+  "lang-scala",
+  "lang-bash",
+  "lang-json",
+  "lang-yaml",
+  "lang-toml",
+  "lang-xml",
+  "lang-html",
+  "lang-css",
+  "lang-scss",
+  "lang-markdown",
+  "lang-sql",
+  "lang-swift",
+  "lang-elixir",
+  "lang-haskell",
+  "lang-ocaml",
+  "lang-lua",
+  "lang-php",
+  "lang-r",
+  "lang-dart",
+  "lang-asm",
+  "lang-x86asm",
+  "lang-matlab",
+  "lang-perl",
+  "lang-erlang",
+  "lang-clojure",
+  "lang-fsharp",
+  "lang-vb",
+  "lang-cobol",
+  "lang-julia",
+  "lang-d",
+  "lang-powershell",
+  "lang-cmake",
 ] }
 arborium-rust = "2"
 arborium-swift = "2"
@@ -86,7 +122,15 @@ arborium-bash = "2"
 
 # HTTP server for serve command
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", default-features = false, features = ["rt", "net", "sync", "time", "process", "io-util", "macros"] }
+tokio = { version = "1", default-features = false, features = [
+  "rt",
+  "net",
+  "sync",
+  "time",
+  "process",
+  "io-util",
+  "macros",
+] }
 tower-http = { version = "0.6", features = ["cors"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1"] }
 futures-util = "0.3"

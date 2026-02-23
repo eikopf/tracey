@@ -1,6 +1,6 @@
 [package]
 name = "tracey-api"
-version = "1.0.0"
+version.workspace = true
 description = "API types for tracey dashboard"
 edition.workspace = true
 license.workspace = true

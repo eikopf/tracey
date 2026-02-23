@@ -1,6 +1,6 @@
 [package]
 name = "tracey-proto"
-version = "1.0.0"
+version.workspace = true
 description = "Protocol definitions for tracey daemon RPC"
 edition.workspace = true
 license.workspace = true

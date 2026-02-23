@@ -1,6 +1,6 @@
 [package]
 name = "tracey-core"
-version = "1.0.0"
+version.workspace = true
 description = "Core library for tracey - spec coverage analysis"
 keywords = ["specification", "coverage", "traceability", "testing", "documentation"]
 categories = ["development-tools"]
@@ -20,36 +20,36 @@ default = ["walk", "parallel"]
 walk = ["dep:ignore", "dep:globset"]
 parallel = ["dep:rayon"]
 reverse = [
-    "dep:arborium",
-    "dep:arborium-rust",
-    "dep:arborium-swift",
-    "dep:arborium-go",
-    "dep:arborium-java",
-    "dep:arborium-python",
-    "dep:arborium-typescript",
-    "dep:arborium-php",
-    "dep:arborium-c",
-    "dep:arborium-cpp",
-    "dep:arborium-ruby",
-    "dep:arborium-r",
-    "dep:arborium-dart",
-    "dep:arborium-lua",
-    "dep:arborium-asm",
-    "dep:arborium-matlab",
-    "dep:arborium-perl",
-    "dep:arborium-haskell",
-    "dep:arborium-elixir",
-    "dep:arborium-erlang",
-    "dep:arborium-clojure",
-    "dep:arborium-fsharp",
-    "dep:arborium-vb",
-    "dep:arborium-cobol",
-    "dep:arborium-julia",
-    "dep:arborium-d",
-    "dep:arborium-powershell",
-    "dep:arborium-cmake",
-    "dep:arborium-ocaml",
-    "dep:arborium-bash",
+  "dep:arborium",
+  "dep:arborium-rust",
+  "dep:arborium-swift",
+  "dep:arborium-go",
+  "dep:arborium-java",
+  "dep:arborium-python",
+  "dep:arborium-typescript",
+  "dep:arborium-php",
+  "dep:arborium-c",
+  "dep:arborium-cpp",
+  "dep:arborium-ruby",
+  "dep:arborium-r",
+  "dep:arborium-dart",
+  "dep:arborium-lua",
+  "dep:arborium-asm",
+  "dep:arborium-matlab",
+  "dep:arborium-perl",
+  "dep:arborium-haskell",
+  "dep:arborium-elixir",
+  "dep:arborium-erlang",
+  "dep:arborium-clojure",
+  "dep:arborium-fsharp",
+  "dep:arborium-vb",
+  "dep:arborium-cobol",
+  "dep:arborium-julia",
+  "dep:arborium-d",
+  "dep:arborium-powershell",
+  "dep:arborium-cmake",
+  "dep:arborium-ocaml",
+  "dep:arborium-bash",
 ]
 
 [dependencies]

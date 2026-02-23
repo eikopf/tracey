@@ -1,6 +1,6 @@
 [package]
 name = "tracey-config"
-version = "1.0.0"
+version.workspace = true
 description = "Configuration types for tracey"
 edition.workspace = true
 license.workspace = true

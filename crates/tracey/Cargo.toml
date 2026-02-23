@@ -1,6 +1,6 @@
 [package]
 name = "tracey"
-version = "1.0.0"
+version.workspace = true
 description = "CLI tool to measure spec coverage in Rust codebases"
 keywords = ["specification", "coverage", "traceability", "testing", "documentation"]
 categories = ["development-tools", "command-line-utilities"]
@@ -82,7 +82,11 @@ blake3 = "1.5"
 tantivy = { workspace = true, optional = true }
 
 # MCP server
-rust-mcp-sdk = { version = "0.8", default-features = false, features = ["stdio", "server", "macros"] }
+rust-mcp-sdk = { version = "0.8", default-features = false, features = [
+  "stdio",
+  "server",
+  "macros",
+] }
 async-trait = "0.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
