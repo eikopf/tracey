@@ -8,8 +8,9 @@
 
 #![allow(clippy::enum_variant_names)]
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use eyre::Result;
@@ -22,6 +23,7 @@ use rust_mcp_sdk::schema::{
 };
 use rust_mcp_sdk::{McpServer, StdioTransport, ToMcpServerHandler, TransportOptions, tool_box};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value as JsonValue, json};
 use tokio::sync::RwLock;
 use url::Url;
 
@@ -34,18 +36,23 @@ use crate::bridge::query;
 /// Get coverage status for all specs/implementations
 #[mcp_tool(
     name = "tracey_status",
-    description = "Get coverage overview for all specs and implementations. Shows current coverage percentages and what changed since last rebuild."
+    description = "Get coverage overview for all specs and implementations. Shows current coverage percentages and what changed since last rebuild. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-pub struct StatusTool {}
+pub struct StatusTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
+}
 
 /// Get rules without implementation references
 #[mcp_tool(
     name = "tracey_uncovered",
-    description = "List rules that have no implementation references ([impl ...] comments). Optionally filter by spec/impl or rule ID prefix."
+    description = "List rules that have no implementation references ([impl ...] comments). Optionally filter by spec/impl or rule ID prefix. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct UncoveredTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     #[serde(default)]
     pub spec_impl: Option<String>,
     #[serde(default)]
@@ -55,10 +62,12 @@ pub struct UncoveredTool {
 /// Get rules without verification references
 #[mcp_tool(
     name = "tracey_untested",
-    description = "List rules that have implementation but no verification references ([verify ...] comments). These rules are implemented but not tested."
+    description = "List rules that have implementation but no verification references ([verify ...] comments). These rules are implemented but not tested. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct UntestedTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     #[serde(default)]
     pub spec_impl: Option<String>,
     #[serde(default)]
@@ -68,10 +77,12 @@ pub struct UntestedTool {
 /// List stale references (code pointing to older rule versions)
 #[mcp_tool(
     name = "tracey_stale",
-    description = "List references that point to older rule versions. These need code updates to match the current spec, then annotation bumps."
+    description = "List references that point to older rule versions. These need code updates to match the current spec, then annotation bumps. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct StaleTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     #[serde(default)]
     pub spec_impl: Option<String>,
     #[serde(default)]
@@ -81,10 +92,12 @@ pub struct StaleTool {
 /// Get code units without rule references
 #[mcp_tool(
     name = "tracey_unmapped",
-    description = "Show source tree with coverage percentages. Code units (functions, structs, etc.) without any rule references are 'unmapped'. Pass a path to zoom into a specific directory or file."
+    description = "Show source tree with coverage percentages. Code units (functions, structs, etc.) without any rule references are 'unmapped'. Pass a path to zoom into a specific directory or file. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct UnmappedTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     #[serde(default)]
     pub spec_impl: Option<String>,
     #[serde(default)]
@@ -94,38 +107,48 @@ pub struct UnmappedTool {
 /// Get details about a specific rule
 #[mcp_tool(
     name = "tracey_rule",
-    description = "Get full details about a specific rule: its text, where it's defined, and all implementation/verification references."
+    description = "Get full details about a specific rule: its text, where it's defined, and all implementation/verification references. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct RuleTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     pub rule_id: String,
 }
 
 /// Display current configuration
 #[mcp_tool(
     name = "tracey_config",
-    description = "Display the current configuration for all specs and implementations, including include/exclude patterns."
+    description = "Display the current configuration for all specs and implementations, including include/exclude patterns. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-pub struct ConfigTool {}
+pub struct ConfigTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
+}
 
 /// Force a rebuild
 #[mcp_tool(
     name = "tracey_reload",
-    description = "Reload the configuration file and rebuild all data. Use this after creating or modifying the config file."
+    description = "Reload the configuration file and rebuild all data. Use this after creating or modifying the config file. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-pub struct ReloadTool {}
+pub struct ReloadTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
+}
 
 /// r[impl mcp.validation.check]
 ///
 /// Validate the spec and implementation for errors
 #[mcp_tool(
     name = "tracey_validate",
-    description = "Validate the spec and implementation for errors such as circular dependencies, naming violations, and unknown references."
+    description = "Validate the spec and implementation for errors such as circular dependencies, naming violations, and unknown references. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct ValidateTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     /// Spec/impl to validate (e.g., "my-spec/rust"). Optional if only one exists.
     #[serde(default)]
     pub spec_impl: Option<String>,
@@ -136,10 +159,12 @@ pub struct ValidateTool {
 /// r[impl mcp.config.exclude]
 #[mcp_tool(
     name = "tracey_config_exclude",
-    description = "Add an exclude pattern to filter out files from scanning for a specific implementation."
+    description = "Add an exclude pattern to filter out files from scanning for a specific implementation. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct ConfigExcludeTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     /// Spec/impl to modify (e.g., "my-spec/rust"). Optional if only one exists.
     #[serde(default)]
     pub spec_impl: Option<String>,
@@ -152,10 +177,12 @@ pub struct ConfigExcludeTool {
 /// r[impl mcp.config.include]
 #[mcp_tool(
     name = "tracey_config_include",
-    description = "Add an include pattern to expand the set of scanned files for a specific implementation."
+    description = "Add an include pattern to expand the set of scanned files for a specific implementation. Requires `cwd` (absolute workspace path)."
 )]
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct ConfigIncludeTool {
+    /// Absolute workspace path where Tracey should resolve the project root.
+    pub cwd: String,
     /// Spec/impl to modify (e.g., "my-spec/rust"). Optional if only one exists.
     #[serde(default)]
     pub spec_impl: Option<String>,
@@ -185,16 +212,124 @@ tool_box!(
 // MCP Handler
 // ============================================================================
 
+#[derive(Debug, Default, Clone)]
+struct RootRefreshState {
+    client_supports_root_list: Option<bool>,
+    last_client_roots: Vec<String>,
+    last_selected_root: Option<PathBuf>,
+    last_refresh_error: Option<String>,
+    last_tool_cwd: Option<PathBuf>,
+    last_tool_cwd_error: Option<String>,
+}
+
+#[derive(Clone)]
+struct McpTraceSink {
+    path: PathBuf,
+    file: Arc<Mutex<std::fs::File>>,
+}
+
+impl McpTraceSink {
+    fn from_env() -> Option<Self> {
+        let enabled = std::env::var("TRACEY_MCP_TRACE")
+            .ok()
+            .map(|v| {
+                let v = v.trim().to_ascii_lowercase();
+                !matches!(v.as_str(), "" | "0" | "false" | "off" | "no")
+            })
+            .unwrap_or(false);
+
+        if !enabled {
+            return None;
+        }
+
+        let path = std::env::var_os("TRACEY_MCP_TRACE_FILE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                std::env::temp_dir().join(format!("tracey-mcp-{}.jsonl", std::process::id()))
+            });
+
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .ok()?;
+
+        let sink = Self {
+            path,
+            file: Arc::new(Mutex::new(file)),
+        };
+
+        sink.write_json(
+            "trace.start",
+            json!({
+                "pid": std::process::id(),
+                "cwd": std::env::current_dir().ok().map(|p| p.display().to_string()),
+                "trace_path": sink.path.display().to_string(),
+            }),
+        );
+
+        Some(sink)
+    }
+
+    fn write_json(&self, event: &str, payload: JsonValue) {
+        let ts_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let line = json!({
+            "ts_ms": ts_ms,
+            "event": event,
+            "payload": payload,
+        });
+
+        if let Ok(mut file) = self.file.lock() {
+            let _ = std::io::Write::write_all(&mut *file, line.to_string().as_bytes());
+            let _ = std::io::Write::write_all(&mut *file, b"\n");
+            let _ = std::io::Write::flush(&mut *file);
+        }
+    }
+}
+
 /// MCP handler that delegates to the daemon.
 struct TraceyHandler {
+    startup_cwd: Option<PathBuf>,
+    startup_project_root: PathBuf,
+    config_path: PathBuf,
     active_project_root: Arc<RwLock<PathBuf>>,
+    root_refresh_state: Arc<RwLock<RootRefreshState>>,
+    trace_sink: Option<McpTraceSink>,
 }
 
 impl TraceyHandler {
-    pub fn new(project_root: PathBuf) -> Self {
-        Self {
-            active_project_root: Arc::new(RwLock::new(project_root)),
+    pub fn new(project_root: PathBuf, config_path: PathBuf) -> Self {
+        let trace_sink = McpTraceSink::from_env();
+        if let Some(sink) = &trace_sink {
+            tracing::info!(
+                pid = std::process::id(),
+                trace_path = %sink.path.display(),
+                "TRACEY_MCP_TRACE enabled; writing MCP payloads"
+            );
         }
+
+        let handler = Self {
+            startup_cwd: std::env::current_dir().ok(),
+            startup_project_root: project_root.clone(),
+            config_path,
+            active_project_root: Arc::new(RwLock::new(project_root)),
+            root_refresh_state: Arc::new(RwLock::new(RootRefreshState::default())),
+            trace_sink,
+        };
+
+        handler.trace_json(
+            "handler.new",
+            json!({
+                "startup_cwd": handler.startup_cwd.as_ref().map(|p| p.display().to_string()),
+                "startup_project_root": handler.startup_project_root.display().to_string(),
+                "config_path": handler.config_path.display().to_string(),
+            }),
+        );
+
+        handler
     }
 
     async fn current_client(&self) -> query::QueryClient {
@@ -202,20 +337,146 @@ impl TraceyHandler {
         query::QueryClient::new(root, query::Caller::Mcp)
     }
 
+    fn trace_json(&self, event: &str, payload: JsonValue) {
+        if let Some(sink) = &self.trace_sink {
+            sink.write_json(event, payload);
+        }
+    }
+
     async fn refresh_project_root_from_client_roots(&self, runtime: Arc<dyn McpServer>) {
-        if runtime.client_supports_root_list() != Some(true) {
+        let supports_roots = runtime.client_supports_root_list();
+        self.trace_json(
+            "roots.refresh.begin",
+            json!({
+                "supports_roots": supports_roots,
+                "client_info": runtime.client_info(),
+            }),
+        );
+
+        {
+            let mut state = self.root_refresh_state.write().await;
+            state.client_supports_root_list = supports_roots;
+        }
+
+        if supports_roots != Some(true) {
+            self.trace_json(
+                "roots.refresh.skipped",
+                json!({
+                    "reason": "client does not advertise roots capability",
+                    "supports_roots": supports_roots,
+                }),
+            );
             return;
         }
 
-        let Ok(result) = runtime.request_root_list(None).await else {
-            return;
+        match runtime.request_root_list(None).await {
+            Ok(result) => {
+                let roots = result
+                    .roots
+                    .iter()
+                    .map(format_root_entry)
+                    .collect::<Vec<_>>();
+                let selected = select_project_root_from_roots(&result.roots);
+
+                let mut state = self.root_refresh_state.write().await;
+                state.last_client_roots = roots;
+
+                if let Some(project_root) = selected {
+                    *self.active_project_root.write().await = project_root.clone();
+                    state.last_selected_root = Some(project_root);
+                    state.last_refresh_error = None;
+                } else {
+                    state.last_refresh_error =
+                        Some("roots/list returned no usable file:// root".to_string());
+                }
+
+                self.trace_json(
+                    "roots.refresh.result",
+                    json!({
+                        "result": result,
+                        "selected_root": state
+                            .last_selected_root
+                            .as_ref()
+                            .map(|p| p.display().to_string()),
+                        "refresh_error": state.last_refresh_error,
+                    }),
+                );
+            }
+            Err(e) => {
+                let mut state = self.root_refresh_state.write().await;
+                state.last_refresh_error = Some(format!("roots/list request failed: {e}"));
+                self.trace_json(
+                    "roots.refresh.error",
+                    json!({
+                        "error": format!("{e}"),
+                    }),
+                );
+            }
+        }
+    }
+
+    async fn mcp_routing_diagnostics(&self) -> String {
+        let active_root = self.active_project_root.read().await.clone();
+        let state = self.root_refresh_state.read().await.clone();
+
+        let startup_cwd = self
+            .startup_cwd
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(unknown)".to_string());
+
+        let supports_roots = match state.client_supports_root_list {
+            Some(true) => "yes",
+            Some(false) => "no",
+            None => "unknown",
         };
 
-        let Some(project_root) = select_project_root_from_roots(&result.roots) else {
-            return;
+        let roots_summary = if state.last_client_roots.is_empty() {
+            "(none)".to_string()
+        } else {
+            let mut entries = state.last_client_roots;
+            if entries.len() > 8 {
+                entries.truncate(8);
+                entries.push("...".to_string());
+            }
+            entries.join(" | ")
         };
 
-        *self.active_project_root.write().await = project_root;
+        let selected_root = state
+            .last_selected_root
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(none)".to_string());
+        let refresh_error = state
+            .last_refresh_error
+            .as_deref()
+            .unwrap_or("(none)")
+            .to_string();
+        let tool_cwd = state
+            .last_tool_cwd
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(none)".to_string());
+        let tool_cwd_error = state
+            .last_tool_cwd_error
+            .as_deref()
+            .unwrap_or("(none)")
+            .to_string();
+
+        format!(
+            "\n---\nMCP routing diagnostics:\n- pid: {}\n- startup cwd: {}\n- startup project root: {}\n- startup config path: {}\n- active project root: {}\n- client supports roots/list: {}\n- last client roots: {}\n- last selected root: {}\n- last root refresh error: {}\n- last tool cwd: {}\n- last tool cwd error: {}\n",
+            std::process::id(),
+            startup_cwd,
+            self.startup_project_root.display(),
+            self.config_path.display(),
+            active_root.display(),
+            supports_roots,
+            roots_summary,
+            selected_root,
+            refresh_error,
+            tool_cwd,
+            tool_cwd_error
+        )
     }
 }
 
@@ -223,27 +484,47 @@ impl TraceyHandler {
 impl ServerHandler for TraceyHandler {
     async fn handle_initialized_notification(
         &self,
-        _params: Option<NotificationParams>,
+        params: Option<NotificationParams>,
         runtime: Arc<dyn McpServer>,
     ) -> std::result::Result<(), RpcError> {
+        self.trace_json(
+            "notification.initialized",
+            json!({
+                "params": params,
+                "client_info": runtime.client_info(),
+            }),
+        );
         self.refresh_project_root_from_client_roots(runtime).await;
         Ok(())
     }
 
     async fn handle_roots_list_changed_notification(
         &self,
-        _params: Option<NotificationParams>,
+        params: Option<NotificationParams>,
         runtime: Arc<dyn McpServer>,
     ) -> std::result::Result<(), RpcError> {
+        self.trace_json(
+            "notification.roots_list_changed",
+            json!({
+                "params": params,
+                "client_info": runtime.client_info(),
+            }),
+        );
         self.refresh_project_root_from_client_roots(runtime).await;
         Ok(())
     }
 
     async fn handle_list_tools_request(
         &self,
-        _params: Option<PaginatedRequestParams>,
+        params: Option<PaginatedRequestParams>,
         _runtime: Arc<dyn McpServer>,
     ) -> std::result::Result<ListToolsResult, RpcError> {
+        self.trace_json(
+            "request.tools_list",
+            json!({
+                "params": params,
+            }),
+        );
         Ok(ListToolsResult {
             tools: TraceyTools::tools(),
             meta: None,
@@ -256,11 +537,60 @@ impl ServerHandler for TraceyHandler {
         params: CallToolRequestParams,
         runtime: Arc<dyn McpServer>,
     ) -> std::result::Result<CallToolResult, CallToolError> {
-        self.refresh_project_root_from_client_roots(runtime).await;
-        let client = self.current_client().await;
-        let args = params.arguments.unwrap_or_default();
+        let trace_request_params = serde_json::to_value(&params).unwrap_or_else(|e| {
+            json!({
+                "serialize_error": format!("{e}"),
+            })
+        });
+        self.trace_json(
+            "request.tools_call",
+            json!({
+                "params": trace_request_params,
+                "client_info": runtime.client_info(),
+            }),
+        );
 
-        let response = match params.name.as_str() {
+        let tool_name = params.name.clone();
+        let args = params.arguments.unwrap_or_default();
+        let cwd = match parse_required_cwd(&args) {
+            Ok(cwd) => cwd,
+            Err(error) => {
+                {
+                    let mut state = self.root_refresh_state.write().await;
+                    state.last_tool_cwd = None;
+                    state.last_tool_cwd_error = Some(error.clone());
+                }
+                self.trace_json(
+                    "request.tools_call.invalid_cwd",
+                    json!({
+                        "tool": tool_name,
+                        "error": error,
+                    }),
+                );
+                return Ok(CallToolResult::text_content(vec![error.into()]));
+            }
+        };
+
+        let project_root = crate::find_project_root_from(&cwd);
+        {
+            *self.active_project_root.write().await = project_root.clone();
+            let mut state = self.root_refresh_state.write().await;
+            state.last_selected_root = Some(project_root.clone());
+            state.last_refresh_error = None;
+            state.last_tool_cwd = Some(cwd.clone());
+            state.last_tool_cwd_error = None;
+        }
+        self.trace_json(
+            "project_root.from_cwd",
+            json!({
+                "tool": tool_name,
+                "cwd": cwd.display().to_string(),
+                "project_root": project_root.display().to_string(),
+            }),
+        );
+        let client = self.current_client().await;
+
+        let mut response = match tool_name.as_str() {
             "tracey_status" => client.status().await,
             "tracey_uncovered" => {
                 let spec_impl = args.get("spec_impl").and_then(|v| v.as_str());
@@ -330,6 +660,18 @@ impl ServerHandler for TraceyHandler {
             }
         };
 
+        if matches!(tool_name.as_str(), "tracey_status" | "tracey_config") {
+            response.push_str(&self.mcp_routing_diagnostics().await);
+        }
+
+        self.trace_json(
+            "response.tools_call",
+            json!({
+                "tool": tool_name,
+                "response": response,
+            }),
+        );
+
         Ok(CallToolResult::text_content(vec![response.into()]))
     }
 }
@@ -344,6 +686,36 @@ fn select_project_root_from_roots(roots: &[Root]) -> Option<PathBuf> {
     roots
         .iter()
         .find_map(|root| root_uri_to_project_root(root.uri.as_str()))
+}
+
+fn format_root_entry(root: &Root) -> String {
+    match root.name.as_deref() {
+        Some(name) if !name.is_empty() => format!("{name}: {}", root.uri),
+        _ => root.uri.clone(),
+    }
+}
+
+fn parse_required_cwd(args: &JsonMap<String, JsonValue>) -> std::result::Result<PathBuf, String> {
+    let cwd = args
+        .get("cwd")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .ok_or_else(|| {
+            "Error: missing required `cwd` argument (absolute workspace path)".to_string()
+        })?;
+
+    if cwd.is_empty() {
+        return Err("Error: `cwd` must not be empty".to_string());
+    }
+
+    let cwd_path = Path::new(cwd);
+    if !cwd_path.is_absolute() {
+        return Err(format!(
+            "Error: `cwd` must be an absolute path, got `{cwd}`"
+        ));
+    }
+
+    Ok(cwd_path.to_path_buf())
 }
 
 #[cfg(test)]
@@ -379,6 +751,50 @@ mod tests {
 
         assert_eq!(select_project_root_from_roots(&roots), None);
     }
+
+    #[test]
+    fn format_root_entry_prefers_name_when_available() {
+        let root = Root {
+            name: Some("trame".to_string()),
+            uri: "file:///Users/amos/bearcove/trame".to_string(),
+            meta: None,
+        };
+        assert_eq!(
+            format_root_entry(&root),
+            "trame: file:///Users/amos/bearcove/trame"
+        );
+    }
+
+    #[test]
+    fn format_root_entry_uses_uri_when_name_missing() {
+        let root = Root {
+            name: None,
+            uri: "file:///Users/amos/bearcove/trame".to_string(),
+            meta: None,
+        };
+        assert_eq!(
+            format_root_entry(&root),
+            "file:///Users/amos/bearcove/trame"
+        );
+    }
+
+    #[test]
+    fn parse_required_cwd_rejects_missing_value() {
+        let args = JsonMap::new();
+        let error = parse_required_cwd(&args).unwrap_err();
+        assert_eq!(
+            error,
+            "Error: missing required `cwd` argument (absolute workspace path)"
+        );
+    }
+
+    #[test]
+    fn parse_required_cwd_rejects_relative_paths() {
+        let mut args = JsonMap::new();
+        args.insert("cwd".to_string(), JsonValue::String(".".to_string()));
+        let error = parse_required_cwd(&args).unwrap_err();
+        assert_eq!(error, "Error: `cwd` must be an absolute path, got `.`");
+    }
 }
 
 // ============================================================================
@@ -386,7 +802,7 @@ mod tests {
 // ============================================================================
 
 /// Run the MCP bridge server over stdio.
-pub async fn run(root: Option<PathBuf>, _config_path: PathBuf) -> Result<()> {
+pub async fn run(root: Option<PathBuf>, config_path: PathBuf) -> Result<()> {
     // Determine project root
     let project_root = match root {
         Some(r) => r,
@@ -394,7 +810,7 @@ pub async fn run(root: Option<PathBuf>, _config_path: PathBuf) -> Result<()> {
     };
 
     // Create handler
-    let handler = TraceyHandler::new(project_root);
+    let handler = TraceyHandler::new(project_root, config_path);
 
     // Configure server
     let server_details = InitializeResult {
